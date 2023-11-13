@@ -1,15 +1,23 @@
 const express = require('express');
+const axios = require('axios');
 const {
   latestPrice,
+  latestPricesBySearch,
   sectorWiseLatestPrice,
   dailySectorPrice,
   stockDetails,
   topGainerLooser,
+  indexMinuteData,
+  newsByStock,
+  blocktrByStock,
+  pytest,
 } = require('../controllers/priceController');
 
 const router = express.Router();
 
 router.route('/latestPrice').get(latestPrice);
+
+router.route('/latestPricesBySearch').get(latestPricesBySearch);
 
 router.route('/sectorWiseLatestPrice').get(sectorWiseLatestPrice);
 
@@ -17,7 +25,29 @@ router.route('/dailySectorPrice/:sectorTag').get(dailySectorPrice);
 
 router.route('/stock/:code').get(stockDetails);
 
+router.route('/news/:code').get(newsByStock);
+
+router.route('/blockTr/:code').get(blocktrByStock);
+
 router.route('/topGainerLooser').get(topGainerLooser);
 
+router.route('/indexMinuteData').get(indexMinuteData);
+
+router.route('/pytest').get(pytest);
+
+router.route('/test').post(async () => {
+  await axios.request({
+    method: 'post',
+    url: 'https://www.dsebd.org/ajax/load-instrument.php',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8:',
+      Host: 'www.dsebd.org',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    data: {
+      inst: 'INTRACO',
+    },
+  });
+});
+
 module.exports = router;
-topGainerLooser;

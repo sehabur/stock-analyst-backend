@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 
 // Internal imports //
 const priceRoute = require('./routes/priceRoute');
+const dataInsertRoute = require('./routes/dataInsertRoute');
+
 const {
   NotFoundHanlder,
   ErrorHanlder,
@@ -30,6 +32,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/prices', priceRoute);
+app.use('/api/dataInsert', dataInsertRoute);
 
 // Catch 404 and forward to NotFoundHanlder //
 app.use(NotFoundHanlder);
