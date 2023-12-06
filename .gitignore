@@ -3,3 +3,6 @@
 
 # misc
 .env
+.env.production
+.env.development
+
