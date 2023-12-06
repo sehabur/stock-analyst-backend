@@ -11,7 +11,7 @@ const {
   ErrorHanlder,
 } = require('./middlewares/errorHandlingMiddleware');
 
-dotenv.config();
+dotenv.config({ path: `.env.${process.env.NODE_ENV || 'production'}` });
 
 var app = express();
 
