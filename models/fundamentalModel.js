@@ -17,6 +17,8 @@ const fundamentalSchema = mongoose.Schema(
     shortTermLoan: { type: Number, required: true },
     longTermLoan: { type: Number, required: true },
     faceValue: { type: Number, required: true },
+    epsCurrent: { type: Number, required: true },
+    floorPrice: { type: Number, required: true },
     // capitalEmployed: [{ type: Object, required: true }],
     // bookValue: [{ type: Object, required: true }],
     // roce: [{ type: Object, required: true }],

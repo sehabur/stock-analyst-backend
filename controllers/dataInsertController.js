@@ -2,9 +2,28 @@ const Fundamental = require('../models/fundamentalModel');
 
 const xlsx = require('xlsx');
 
-const workbook = xlsx.readFile(
-  'E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx'
-);
+/*
+  @api:       GET /api/dataInsert/eps/
+  @desc:      insert eps quarterly data to collection 
+  @access:    public
+*/
+const insertFloorPrice = async (req, res, next) => {
+  const newWorkbook = xlsx.readFile(
+    'E:/MERN_APP/stock-analyst-bd/data/floor_price_list.xlsx'
+  );
+
+  var xlData = xlsx.utils.sheet_to_json(newWorkbook.Sheets['Sheet1']);
+
+  for (data of xlData) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.code.trim() },
+      { floorPrice: data.price }
+    );
+    // console.log(response);
+  }
+
+  res.send('Floor price updated');
+};
 
 /*
   @api:       GET /api/dataInsert/eps/
@@ -90,23 +109,25 @@ const insertNocfps = async (req, res, next) => {
 };
 
 const insertFinanceData = async (req, res, next) => {
-  //   var sheet_name_list = workbook.SheetNames;
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets['fin']);
+  const workbook = xlsx.readFile(
+    'E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx'
+  );
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets['fin']);
 
   const datamap = [
-    { text: 'Total Asset', value: 'totalAsset' },
-    { text: "Shareholder's equity", value: 'shareholderEquity' },
-    {
-      text: 'Total Non Current Liabilities',
-      value: 'totalNonCurrentLiabilities',
-    },
-    { text: 'Total Current Liabilities', value: 'totalCurrentLiabilities' },
+    // { text: 'Total Asset', value: 'totalAsset' },
+    // { text: "Shareholder's equity", value: 'shareholderEquity' },
+    // {
+    //   text: 'Total Non Current Liabilities',
+    //   value: 'totalNonCurrentLiabilities',
+    // },
+    // { text: 'Total Current Liabilities', value: 'totalCurrentLiabilities' },
+    // { text: 'Revenue', value: 'revenue' },
+    // { text: 'EBIT(Earn Before TAx)', value: 'ebit' },
+    // { text: 'Total Operating Income', value: 'totalOperatingIncome' },
     // { text: 'Total Liabilities', value: 'totalLiabilities' },
     // { text: 'NAV', value: 'nav' },
-    { text: 'Total Operating Income', value: 'totalOperatingIncome' },
-    { text: 'Revenue', value: 'revenue' },
-    { text: 'EBIT(Earn Before TAx)', value: 'ebit' },
-    // { text: 'Net Income/Profit after tax', value: 'netIncomeAfterTax' },
+    { text: 'Net Income/Profit after tax', value: 'profitYearly' },
     // { text: 'Capital Emplyed', value: 'capitalEmplyed' },
     // { text: 'Book Value', value: 'bookValue' },
     // { text: 'ROCE', value: 'roce' },
@@ -115,7 +136,7 @@ const insertFinanceData = async (req, res, next) => {
     // { text: 'EPS', value: 'eps' },
   ];
 
-  const perChunk = 8;
+  const perChunk = 7;
 
   const result = xlData.reduce((resultArray, item, index) => {
     const chunkIndex = Math.floor(index / perChunk);
@@ -139,50 +160,72 @@ const insertFinanceData = async (req, res, next) => {
       values: {},
     };
     for (data of stock) {
-      console.log(data);
+      // console.log(data);
       const param = datamap.find((item) => item.text === data.parameter);
 
-      financeData.values[param?.value] = [
-        {
-          year: '2017',
-          value: data['2017'],
-        },
-        {
-          year: '2018',
-          value: data['2018'],
-        },
-        {
-          year: '2019',
-          value: data['2019'],
-        },
-        {
-          year: '2020',
-          value: data['2020'],
-        },
-        {
-          year: '2021',
-          value: data['2021'],
-        },
-        {
-          year: '2022',
-          value: data['2022'],
-        },
-      ];
+      if (param?.value) {
+        financeData.values[param?.value] = [
+          {
+            year: '2017',
+            value: Number((data['2017'] / 1000000).toFixed(2)),
+          },
+          // {
+          //   year: '2018',
+          //   value: data['2018'],
+          // },
+          // {
+          //   year: '2019',
+          //   value: data['2019'],
+          // },
+          // {
+          //   year: '2020',
+          //   value: data['2020'],
+          // },
+          // {
+          //   year: '2021',
+          //   value: data['2021'],
+          // },
+          // {
+          //   year: '2022',
+          //   value: data['2022'],
+          // },
+        ];
+      }
     }
 
     finalData.push(financeData);
   }
+
+  for (item of finalData) {
+    const tradingCode = item.tradingCode;
+    const updateData = item.values;
+
+    // const response = await Fundamental.findOneAndUpdate(
+    //   { tradingCode },
+    //   { ...updateData }
+    // );
+
+    // //For profit of 2017 //
+    if (item.values?.profitYearly) {
+      const response = await Fundamental.findOneAndUpdate(
+        { tradingCode },
+        {
+          $push: {
+            profitYearly: item.values.profitYearly[0],
+          },
+        }
+      );
+    }
+
+    // if (item.values?.profitYearly) {
+    //   const response = await Fundamental.findOneAndUpdate(
+    //     { tradingCode },
+    //     { $pop: { profitYearly: 1 } }
+    //   );
+    // }
+  }
+
   res.json({ finalData });
-
-  // for (item of finalData) {
-  //   const tradingCode = item.tradingCode;
-  //   const updateData = item.values;
-
-  //   const response = await Fundamental.findOneAndUpdate(
-  //     { tradingCode },
-  //     { ...updateData }
-  //   );
-  // }
 };
 
 module.exports = {
@@ -190,4 +233,5 @@ module.exports = {
   insertNav,
   insertNocfps,
   insertFinanceData,
+  insertFloorPrice,
 };
