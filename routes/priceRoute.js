@@ -6,9 +6,7 @@ const {
   sectorWiseLatestPrice,
   dailySectorPrice,
   stockDetails,
-  topGainerLoser,
   allGainerLoser,
-
   indexMinuteData,
   newsByStock,
   blocktrByStock,
@@ -30,8 +28,6 @@ router.route('/stock/:code').get(stockDetails);
 router.route('/news/:code').get(newsByStock);
 
 router.route('/blockTr/:code').get(blocktrByStock);
-
-router.route('/topGainerLoser').get(topGainerLoser);
 
 router.route('/allGainerLoser').get(allGainerLoser);
 

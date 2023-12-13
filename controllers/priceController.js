@@ -14,7 +14,6 @@ const {
   stocksListDetails,
   circuitMoveRange,
 } = require('../data/dse');
-const { assert } = require('console');
 
 /*
   @api:       GET /api/prices/latestPrice/
@@ -93,7 +92,7 @@ const latestPricesBySearch = async (req, res, next) => {
 };
 
 /*
-  @api:       GET /api/prices/sectorWiseLatestPrice/
+  @api:       GET /api/prices/sectorWiseLatestPrice
   @desc:      get latest share prices group by sector
   @access:    public
 */
@@ -112,6 +111,21 @@ const sectorWiseLatestPrice = async (req, res, next) => {
       $group: {
         _id: '$sector',
         totalShare: { $sum: 1 },
+        uptrendItems: {
+          $addToSet: {
+            $cond: [{ $gt: ['$latest_price.change', 0] }, '$tradingCode', 0],
+          },
+        },
+        downtrendItems: {
+          $addToSet: {
+            $cond: [{ $lt: ['$latest_price.change', 0] }, '$tradingCode', 0],
+          },
+        },
+        neutralItems: {
+          $addToSet: {
+            $cond: [{ $eq: ['$latest_price.change', 0] }, '$tradingCode', 0],
+          },
+        },
         uptrend: {
           $sum: {
             $cond: [{ $gt: ['$latest_price.change', 0] }, 1, 0],
@@ -127,15 +141,23 @@ const sectorWiseLatestPrice = async (req, res, next) => {
             $cond: [{ $eq: ['$latest_price.change', 0] }, 1, 0],
           },
         },
-        ltp: { $avg: '$latest_price.ltp' },
+        ltp: {
+          $avg: {
+            $cond: [
+              { $gt: ['$latest_price.ltp', 0] },
+              '$latest_price.ltp',
+              '$latest_price.ycp',
+            ],
+          },
+        },
         ycp: { $avg: '$latest_price.ycp' },
-        high: { $avg: '$latest_price.high' },
-        low: { $avg: '$latest_price.low' },
-        close: { $avg: '$latest_price.close' },
+        // high: { $avg: '$latest_price.high' },
+        // low: { $avg: '$latest_price.low' },
+        // close: { $avg: '$latest_price.close' },
         change: { $avg: '$latest_price.change' },
         value: { $sum: '$latest_price.value' },
-        volume: { $sum: '$latest_price.volume' },
-        trade: { $sum: '$latest_price.trade' },
+        // volume: { $sum: '$latest_price.volume' },
+        // trade: { $sum: '$latest_price.trade' },
         valueCategoryA: {
           $sum: {
             $cond: {
@@ -178,18 +200,33 @@ const sectorWiseLatestPrice = async (req, res, next) => {
       $project: {
         _id: 0,
         sector: '$_id',
+        pp: 1,
         uptrend: 1,
         downtrend: 1,
         neutral: 1,
+        uptrendItems: 1,
+        downtrendItems: 1,
+        neutralItems: 1,
         ltp: { $round: ['$ltp', 2] },
         ycp: { $round: ['$ycp', 2] },
-        high: { $round: ['$high', 2] },
-        low: { $round: ['$low', 2] },
-        close: { $round: ['$close', 2] },
+        // high: { $round: ['$high', 2] },
+        // low: { $round: ['$low', 2] },
+        // close: { $round: ['$close', 2] },
         change: { $round: ['$change', 2] },
+        percentChange: {
+          $round: [
+            {
+              $multiply: [
+                { $divide: [{ $subtract: ['$ltp', '$ycp'] }, '$ycp'] },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
         valueTotal: { $round: ['$value', 2] },
-        volume: { $round: ['$volume', 2] },
-        trade: { $round: ['$trade', 2] },
+        // volume: { $round: ['$volume', 2] },
+        // trade: { $round: ['$trade', 2] },
         valueCategoryA: { $round: ['$valueCategoryA', 2] },
         valueCategoryB: { $round: ['$valueCategoryB', 2] },
         valueCategoryN: { $round: ['$valueCategoryN', 2] },
@@ -679,7 +716,7 @@ const stockDetails = async (req, res, next) => {
   ).sector;
 
   const { dailyPriceUpdateDate, minuteDataUpdateDate } =
-    await Setting.findOne().select('dailyIndexUpdateDate minuteDataUpdateDate');
+    await Setting.findOne().select('dailyPriceUpdateDate minuteDataUpdateDate');
 
   const minutePrice = await MinutePrice.aggregate([
     {
@@ -753,6 +790,7 @@ const stockDetails = async (req, res, next) => {
         pipeline: [
           {
             $match: {
+              tradingCode: tradingCode,
               date: {
                 $gt: dailyPriceUpdateDate,
               },
@@ -1079,6 +1117,15 @@ const stockDetails = async (req, res, next) => {
     }
   }
 
+  const peRatio = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
+  const priceToBookValueRatio = Number(
+    (
+      (ltp * fundamentalsBasic.totalShares) /
+      (fundamentalsBasic.totalAsset[dataLength - 1].value -
+        fundamentalsBasic.totalCurrentLiabilities[dataLength - 1].value -
+        fundamentalsBasic.totalNonCurrentLiabilities[dataLength - 1].value)
+    ).toFixed(2)
+  );
   const fundamentalsExtended = {
     circuitUp,
     circuitLow,
@@ -1087,27 +1134,24 @@ const stockDetails = async (req, res, next) => {
     roce,
     profitMargin,
     divPayoutRatio,
-    pe: Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2)),
+    peRatio,
+    priceToBookValueRatio,
     marketCap: Number(
       ((ltp * fundamentalsBasic.totalShares) / 10000000).toFixed(3)
-    ),
-    priceToBookValueRatio: Number(
-      (
-        (ltp * fundamentalsBasic.totalShares) /
-        (fundamentalsBasic.totalAsset[dataLength - 1].value -
-          fundamentalsBasic.totalCurrentLiabilities[dataLength - 1].value -
-          fundamentalsBasic.totalNonCurrentLiabilities[dataLength - 1].value)
-      ).toFixed(2)
     ),
     sectorPeRatio: {
       min: peValues[0],
       median: getMedian(peValues),
       max: peValues[peValues.length - 1],
+      items: peValues.length,
+      position: peValues.findIndex((item) => item === peRatio),
     },
     sectorPbvRatio: {
       min: pbvValues[0],
       median: getMedian(pbvValues),
       max: pbvValues[pbvValues.length - 1],
+      items: pbvValues.length,
+      position: pbvValues.findIndex((item) => item === priceToBookValueRatio),
     },
   };
 
@@ -1170,10 +1214,9 @@ const newsByStock = async (req, res, next) => {
 
   const { limit } = url.parse(req.url, true).query;
 
-  const queryLimit = limit ? Number(limit) : 20;
+  const queryLimit = limit ? Number(limit) : 25;
 
   let news;
-
   if (tradingCode === 'all') {
     news = await News.find().sort({ date: -1 }).limit(queryLimit);
   } else {
@@ -1181,7 +1224,59 @@ const newsByStock = async (req, res, next) => {
       .sort({ date: -1 })
       .limit(queryLimit);
   }
-  res.status(200).json(news);
+
+  let mergedNewsList = [];
+
+  for (let newsItem of news) {
+    const dateIndex = mergedNewsList.findIndex((item) => {
+      const itemDate = new Date(item.date);
+      const newsItemDate = new Date(newsItem.date);
+      return itemDate.getTime() == newsItemDate.getTime();
+    });
+    if (dateIndex !== -1) {
+      mergedNewsList[dateIndex]?.news.push(newsItem);
+    } else {
+      mergedNewsList.push({
+        date: newsItem.date,
+        news: [newsItem],
+      });
+    }
+  }
+
+  let finalNewsList = [];
+
+  for (let newslist of mergedNewsList) {
+    let tempNewsList = [];
+    for (let news of newslist.news) {
+      const titleIndex = tempNewsList.findIndex(
+        (item) => item.title === news.title
+      );
+      if (titleIndex !== -1) {
+        tempNewsList[titleIndex]['description'] =
+          tempNewsList[titleIndex]['description'] + ' ' + news.description;
+      } else {
+        tempNewsList.push(news);
+      }
+    }
+    finalNewsList.push(...tempNewsList);
+  }
+
+  // for (let newsItem of news) {
+  // }
+
+  // for (let newsItem of news) {
+  //   const titleIndex = mergedNewsList.findIndex(
+  //     (item) => item.title === newsItem.title
+  //   );
+
+  //   if (titleIndex !== -1 && dateIndex !== -1 && titleIndex === dateIndex) {
+  //     mergedNewsList[titleIndex]['description'] =
+  //       mergedNewsList[titleIndex]['description'] + newsItem.description;
+  //   } else {
+  //     mergedNewsList.push(newsItem);
+  //   }
+  // }
+  res.status(200).json(finalNewsList);
 };
 
 /*
@@ -1210,192 +1305,10 @@ const blocktrByStock = async (req, res, next) => {
 };
 
 /*
-  @api:       GET /api/prices/topGainerLoser
-  @desc:      get daily yearly and all time gainer and losers
+  @api:       GET /api/prices/allGainerLoser
+  @desc:      get gainer and losers data
   @access:    public
 */
-const topGainerLoser = async (req, res, next) => {
-  // const today = DateTime.now().setZone('Asia/Dhaka');
-  // const queryDate = today
-  //   .set({
-  //     hour: 0,
-  //     minute: 0,
-  //     second: 0,
-  //     millisecond: 0,
-  //   })
-  //   .setZone('UTC', { keepLocalTime: true });
-  // const yesterday = queryDate.minus({ days: 1 });
-
-  const { dailyPriceUpdateDate, minuteDataUpdateDate } =
-    await Setting.findOne().select('dailyIndexUpdateDate minuteDataUpdateDate');
-
-  const gainerLoser = await LatestPrice.aggregate([
-    {
-      $lookup: {
-        from: 'daily_prices',
-        localField: 'tradingCode',
-        foreignField: 'tradingCode',
-        as: 'yesterday_price',
-        pipeline: [
-          {
-            $match: {
-              date: {
-                $lt: minuteDataUpdateDate,
-              },
-            },
-          },
-          {
-            $sort: {
-              date: -1,
-            },
-          },
-          {
-            $limit: 1,
-          },
-        ],
-      },
-    },
-    { $unwind: '$yesterday_price' },
-    {
-      $facet: {
-        gainerDaily: [
-          {
-            $sort: {
-              percentChange: -1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-        loserDaily: [
-          {
-            $match: {
-              ltp: {
-                $gt: 0,
-              },
-            },
-          },
-          {
-            $sort: {
-              percentChange: 1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-        gainerOneYear: [
-          {
-            $match: {
-              $expr: {
-                $gt: ['$ltp', '$yesterday_price.oneYearHigh'],
-              },
-            },
-          },
-          {
-            $sort: {
-              percentChange: -1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-        gainerAlltime: [
-          {
-            $match: {
-              $expr: {
-                $gt: ['$ltp', '$yesterday_price.alltimeHigh'],
-              },
-            },
-          },
-          {
-            $sort: {
-              percentChange: -1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-        loserOneYear: [
-          {
-            $match: {
-              ltp: {
-                $ne: 0,
-              },
-              $expr: {
-                $lt: ['$ltp', '$yesterday_price.oneYearLow'],
-              },
-            },
-          },
-          {
-            $sort: {
-              percentChange: 1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-        loserAlltime: [
-          {
-            $match: {
-              ltp: {
-                $ne: 0,
-              },
-              $expr: {
-                $lt: ['$ltp', '$yesterday_price.alltimeLow'],
-              },
-            },
-          },
-          {
-            $sort: {
-              percentChange: 1,
-            },
-          },
-          { $limit: 10 },
-          {
-            $project: {
-              date: 1,
-              tradingCode: 1,
-              percentChange: 1,
-            },
-          },
-        ],
-      },
-    },
-  ]);
-
-  res.status(200).json(gainerLoser[0]);
-};
-
 const allGainerLoser = async (req, res, next) => {
   const { minuteDataUpdateDate } = await Setting.findOne().select(
     'minuteDataUpdateDate'
@@ -2040,6 +1953,9 @@ const allGainerLoser = async (req, res, next) => {
   res.status(200).json(gainerLoser[0]);
 };
 
+/*
+  test function
+*/
 const pytest = async (req, res, next) => {
   const dailySector = await DailyPrice.aggregate([
     {
@@ -2133,7 +2049,6 @@ module.exports = {
   indexMinuteData,
   newsByStock,
   blocktrByStock,
-  topGainerLoser,
   allGainerLoser,
   pytest,
 };
