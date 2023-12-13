@@ -10,6 +10,7 @@
     "axios": "^1.5.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "~1.4.4",
+    "cors": "^2.8.5",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "debug": "~2.6.9",
