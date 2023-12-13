@@ -1,6 +1,7 @@
 // External imports //
 var express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 // Internal imports //
 const priceRoute = require('./routes/priceRoute');
@@ -15,6 +16,7 @@ dotenv.config({ path: `.env.${process.env.NODE_ENV || 'production'}` });
 
 var app = express();
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
