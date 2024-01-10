@@ -115,117 +115,190 @@ const insertFinanceData = async (req, res, next) => {
   const xlData = xlsx.utils.sheet_to_json(workbook.Sheets['fin']);
 
   const datamap = [
-    // { text: 'Total Asset', value: 'totalAsset' },
-    // { text: "Shareholder's equity", value: 'shareholderEquity' },
-    // {
-    //   text: 'Total Non Current Liabilities',
-    //   value: 'totalNonCurrentLiabilities',
-    // },
-    // { text: 'Total Current Liabilities', value: 'totalCurrentLiabilities' },
-    // { text: 'Revenue', value: 'revenue' },
-    // { text: 'EBIT(Earn Before TAx)', value: 'ebit' },
-    // { text: 'Total Operating Income', value: 'totalOperatingIncome' },
-    // { text: 'Total Liabilities', value: 'totalLiabilities' },
-    // { text: 'NAV', value: 'nav' },
-    { text: 'Net Income/Profit after tax', value: 'profitYearly' },
-    // { text: 'Capital Emplyed', value: 'capitalEmplyed' },
-    // { text: 'Book Value', value: 'bookValue' },
-    // { text: 'ROCE', value: 'roce' },
-    // { text: 'D/E', value: 'de' },
-    // { text: 'ROE', value: 'roe' },
-    // { text: 'EPS', value: 'eps' },
+    { text: 'Total Asset', value: 'totalAsset' },
+    { text: 'Total Current Asset', value: 'totalCurrentAsset' },
+    { text: "Shareholder's equity", value: 'shareholderEquity' },
+    {
+      text: 'Total Non Current Liabilities',
+      value: 'totalNonCurrentLiabilities',
+    },
+    { text: 'Total Current Liabilities', value: 'totalCurrentLiabilities' },
+    { text: 'Revenue', value: 'revenue' },
+    { text: 'Operating Profit/Loss', value: 'operatingProfit' },
+    { text: 'EBIT(Earn Before TAx)', value: 'ebit' },
+    { text: 'Net Income/Profit after tax', value: 'netIncome' },
   ];
 
-  const perChunk = 7;
-
+  const perChunk = 9;
   const result = xlData.reduce((resultArray, item, index) => {
     const chunkIndex = Math.floor(index / perChunk);
-
     if (!resultArray[chunkIndex]) {
       resultArray[chunkIndex] = []; // start a new chunk
     }
-
     resultArray[chunkIndex].push(item);
-
     return resultArray;
   }, []);
 
-  finalData = [];
+  // res.json(result);
 
-  // res.json({ result });
+  finalData = [];
 
   for (stock of result) {
     let financeData = {
       tradingCode: stock[0].tradingCode,
       values: {},
     };
-    for (data of stock) {
-      // console.log(data);
-      const param = datamap.find((item) => item.text === data.parameter);
 
-      if (param?.value) {
-        financeData.values[param?.value] = [
-          {
-            year: '2017',
-            value: Number((data['2017'] / 1000000).toFixed(2)),
-          },
-          // {
-          //   year: '2018',
-          //   value: data['2018'],
-          // },
-          // {
-          //   year: '2019',
-          //   value: data['2019'],
-          // },
-          // {
-          //   year: '2020',
-          //   value: data['2020'],
-          // },
-          // {
-          //   year: '2021',
-          //   value: data['2021'],
-          // },
-          // {
-          //   year: '2022',
-          //   value: data['2022'],
-          // },
-        ];
+    let years = Object.keys(stock[0]).filter((item) => item.startsWith('20'));
+
+    for (data of stock) {
+      const param = datamap.find((item) => item.text === data.parameter).value;
+
+      if (param) {
+        yearWiseValue = [];
+
+        for (let year of years) {
+          yearWiseValue.push({
+            year: year,
+            value: data[year] || null,
+          });
+        }
+        financeData.values[param] = yearWiseValue;
       }
     }
-
     finalData.push(financeData);
   }
 
-  for (item of finalData) {
-    const tradingCode = item.tradingCode;
-    const updateData = item.values;
+  // res.json(finalData);
 
-    // const response = await Fundamental.findOneAndUpdate(
-    //   { tradingCode },
-    //   { ...updateData }
-    // );
+  let dataPush = [];
 
-    // //For profit of 2017 //
-    if (item.values?.profitYearly) {
-      const response = await Fundamental.findOneAndUpdate(
-        { tradingCode },
-        {
-          $push: {
-            profitYearly: item.values.profitYearly[0],
-          },
-        }
-      );
+  for (let data of finalData) {
+    let totalLiabilities = [];
+    let bookValue = [];
+    let roe = [];
+    let roce = [];
+    let de = [];
+    let profitMargin = [];
+    let netIncomeRatio = [];
+    let currentRatio = [];
+    let capitalEmployed = [];
+    let roa = [];
+    console.log(data.tradingCode);
+    for (let i = 0; i < data.values.totalAsset.length; i++) {
+      const year = data.values.totalAsset[i].year;
+
+      totalLiabilities.push({
+        year: year,
+        value: Number(
+          data.values.totalNonCurrentLiabilities[i].value +
+            data.values.totalCurrentLiabilities[i].value
+        ),
+      });
+      bookValue.push({
+        year: year,
+        value: Number(
+          data.values.totalAsset[i].value -
+            (data.values.totalNonCurrentLiabilities[i].value +
+              data.values.totalCurrentLiabilities[i].value)
+        ),
+      });
+      capitalEmployed.push({
+        year: year,
+        value: Number(
+          data.values.totalAsset[i].value -
+            data.values.totalCurrentLiabilities[i].value
+        ),
+      });
+      roa.push({
+        year: year,
+        value: Number(
+          (
+            data.values.netIncome[i].value / data.values.totalAsset[i].value
+          ).toFixed(3)
+        ),
+      });
+      currentRatio.push({
+        year: year,
+        value: Number(
+          (
+            data.values.totalCurrentAsset[i].value /
+            data.values.totalCurrentLiabilities[i].value
+          ).toFixed(3)
+        ),
+      });
+      netIncomeRatio.push({
+        year: year,
+        value: Number(
+          (
+            data.values.netIncome[i].value / data.values.revenue[i].value
+          ).toFixed(3)
+        ),
+      });
+      profitMargin.push({
+        year: year,
+        value: Number(
+          (
+            data.values.revenue[i].value / data.values.netIncome[i].value
+          ).toFixed(3)
+        ),
+      });
+      de.push({
+        year: year,
+        value: Number(
+          (
+            (data.values.totalNonCurrentLiabilities[i].value +
+              data.values.totalCurrentLiabilities[i].value) /
+            (data.values.totalAsset[i].value -
+              (data.values.totalNonCurrentLiabilities[i].value +
+                data.values.totalCurrentLiabilities[i].value))
+          ).toFixed(3)
+        ),
+      });
+      roce.push({
+        year: year,
+
+        value: Number(
+          (
+            data.values.ebit[i].value /
+            (data.values.totalAsset[i].value -
+              data.values.totalCurrentLiabilities[i].value)
+          ).toFixed(3)
+        ),
+      });
+      roe.push({
+        year: year,
+        value: Number(
+          (
+            data.values.netIncome[i].value /
+            (data.values.totalAsset[i].value -
+              (data.values.totalNonCurrentLiabilities[i].value +
+                data.values.totalCurrentLiabilities[i].value))
+          ).toFixed(3)
+        ),
+      });
     }
+    data.values.totalLiabilities = totalLiabilities;
+    data.values.bookValue = bookValue;
+    data.values.capitalEmployed = capitalEmployed;
+    data.values.roa = roa;
+    data.values.currentRatio = currentRatio;
+    data.values.netIncomeRatio = netIncomeRatio;
+    data.values.profitMargin = profitMargin;
+    data.values.de = de;
+    data.values.roce = roce;
+    data.values.roe = roe;
 
-    // if (item.values?.profitYearly) {
-    //   const response = await Fundamental.findOneAndUpdate(
-    //     { tradingCode },
-    //     { $pop: { profitYearly: 1 } }
-    //   );
-    // }
+    dataPush.push(data);
   }
 
-  res.json({ finalData });
+  for (item of dataPush) {
+    const tradingCode = item.tradingCode;
+    console.log(tradingCode);
+    await Fundamental.findOneAndUpdate({ tradingCode }, item.values);
+  }
+
+  res.json(dataPush);
 };
 
 module.exports = {

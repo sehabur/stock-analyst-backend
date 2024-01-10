@@ -10,6 +10,7 @@ const {
   indexMinuteData,
   newsByStock,
   blocktrByStock,
+  screener,
   pytest,
 } = require('../controllers/priceController');
 
@@ -32,6 +33,8 @@ router.route('/blockTr/:code').get(blocktrByStock);
 router.route('/allGainerLoser').get(allGainerLoser);
 
 router.route('/indexMinuteData').get(indexMinuteData);
+
+router.route('/screener').post(screener);
 
 router.route('/pytest').get(pytest);
 

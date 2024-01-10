@@ -944,33 +944,23 @@ const stockDetails = async (req, res, next) => {
       $unwind: '$latest_prices',
     },
     {
+      $addFields: {
+        ltp: {
+          $cond: [
+            { $gt: ['$latest_prices.ltp', 0] },
+            '$latest_prices.ltp',
+            '$latest_prices.ycp',
+          ],
+        },
+      },
+    },
+    {
       $project: {
-        // code: '$tradingCode',
-        // ltp: {
-        //   $cond: [
-        //     { $gt: ['$latest_prices.ltp', 0] },
-        //     '$latest_prices.ltp',
-        //     '$latest_prices.ycp',
-        //   ],
-        // },
-        // ycp: '$latest_prices.ycp',
-        // eps: '$epsCurrent',
-        // a: { $last: '$totalAsset.value' },
-        // b: { $last: '$totalCurrentLiabilities.value' },
-        // c: { $last: '$totalNonCurrentLiabilities.value' },
+        tradingCode: 1,
         pe: {
           $round: [
             {
-              $divide: [
-                {
-                  $cond: [
-                    { $gt: ['$latest_prices.ltp', 0] },
-                    '$latest_prices.ltp',
-                    '$latest_prices.ycp',
-                  ],
-                },
-                '$epsCurrent',
-              ],
+              $divide: ['$ltp', '$epsCurrent'],
             },
             2,
           ],
@@ -980,29 +970,18 @@ const stockDetails = async (req, res, next) => {
             {
               $divide: [
                 {
-                  $multiply: [
-                    {
-                      $cond: [
-                        { $gt: ['$latest_prices.ltp', 0] },
-                        '$latest_prices.ltp',
-                        '$latest_prices.ycp',
-                      ],
-                    },
-                    '$totalShares',
-                  ],
+                  $multiply: ['$ltp', '$totalShares'],
                 },
-                {
-                  $subtract: [
-                    { $last: '$totalAsset.value' },
-                    {
-                      $add: [
-                        { $last: '$totalCurrentLiabilities.value' },
-                        { $last: '$totalNonCurrentLiabilities.value' },
-                      ],
-                    },
-                  ],
-                },
+                '$screener.bookValue.value',
               ],
+            },
+            2,
+          ],
+        },
+        pcf: {
+          $round: [
+            {
+              $divide: ['$ltp', '$screener.nocfpsQuarterly.value'],
             },
             2,
           ],
@@ -1011,12 +990,6 @@ const stockDetails = async (req, res, next) => {
       },
     },
   ]);
-
-  const peValues = sectorRatio.map((item) => item.pe).sort((a, b) => a - b);
-
-  const pbvValues = sectorRatio.map((item) => item.pbv).sort((a, b) => a - b);
-
-  const dataLength = fundamentalsBasic.totalAsset.length;
 
   const latestPrice = minutePrice[0].latest;
 
@@ -1031,134 +1004,213 @@ const stockDetails = async (req, res, next) => {
   );
   const circuitLow = Number((ltp - (ltp * circuitRange) / 100).toFixed(1));
 
-  const getMedian = (values) => {
-    const half = Math.floor(values.length / 2);
-    return Number(
-      (values.length % 2
-        ? values[half]
-        : (values[half - 1] + values[half]) / 2
-      ).toFixed(2)
-    );
+  // const getMedian = (values) => {
+  //   const half = Math.floor(values.length / 2);
+  //   return Number(
+  //     (values.length % 2
+  //       ? values[half]
+  //       : (values[half - 1] + values[half]) / 2
+  //     ).toFixed(2)
+  //   );
+  // };
+
+  // let roe = [];
+  // let roce = [];
+  // let de = [];
+  // let profitMargin = [];
+  // let divPayoutRatio = [];
+  // let totalLiabilities = [];
+
+  // for (let i = 0; i < dataLength; i++) {
+  //   const year = fundamentalsBasic.totalAsset[i].year;
+
+  //   const profit =
+  //     fundamentalsBasic.profitYearly.find((item) => item.year === year)?.value *
+  //     1000000; // from mn to taka //
+  //   const asset = fundamentalsBasic.totalAsset.find(
+  //     (item) => item.year === year
+  //   ).value;
+  //   const totalCurrentLiabilities =
+  //     fundamentalsBasic.totalCurrentLiabilities.find(
+  //       (item) => item.year === year
+  //     ).value;
+  //   const totalNonCurrentLiabilities =
+  //     fundamentalsBasic.totalNonCurrentLiabilities.find(
+  //       (item) => item.year === year
+  //     ).value;
+  //   const shareholderEquity = fundamentalsBasic.shareholderEquity.find(
+  //     (item) => item.year === year
+  //   ).value;
+  //   const ebit = fundamentalsBasic.ebit.find(
+  //     (item) => item.year === year
+  //   ).value;
+  //   const revenue = fundamentalsBasic.revenue.find(
+  //     (item) => item.year === year
+  //   ).value;
+  //   const cashDividend = fundamentalsBasic.cashDividend.find(
+  //     (item) => item.year === year
+  //   )?.value;
+  //   const epsYearly = fundamentalsBasic.epsYearly.find(
+  //     (item) => item.year === year
+  //   )?.value;
+
+  //   if (profit) {
+  //     roe.push({
+  //       year: year,
+  //       value: Number((profit / shareholderEquity).toFixed(3)),
+  //     });
+  //     profitMargin.push({
+  //       year: year,
+  //       value: Number((revenue / profit).toFixed(3)),
+  //     });
+  //   }
+  //   roce.push({
+  //     year: year,
+  //     value: Number((ebit / (asset - totalCurrentLiabilities)).toFixed(3)),
+  //   });
+  //   de.push({
+  //     year: year,
+  //     value: Number(
+  //       (
+  //         (totalCurrentLiabilities + totalNonCurrentLiabilities) /
+  //         shareholderEquity
+  //       ).toFixed(3)
+  //     ),
+  //   });
+  //   totalLiabilities.push({
+  //     year: year,
+  //     value: totalCurrentLiabilities + totalNonCurrentLiabilities,
+  //   });
+
+  //   if (cashDividend && epsYearly) {
+  //     divPayoutRatio.push({
+  //       year: year,
+  //       value: Number(
+  //         (
+  //           (cashDividend * 100) /
+  //           (fundamentalsBasic.faceValue * epsYearly)
+  //         ).toFixed(3)
+  //       ),
+  //     });
+  //   }
+  // }
+
+  // const priceToBookValueRatio = Number(
+  //   (
+  //     (ltp * fundamentalsBasic.totalShares) /
+  //     (fundamentalsBasic.totalAsset[dataLength - 1].value -
+  //       fundamentalsBasic.totalCurrentLiabilities[dataLength - 1].value -
+  //       fundamentalsBasic.totalNonCurrentLiabilities[dataLength - 1].value)
+  //   ).toFixed(2)
+  // );
+
+  const formatRatioValues = (type, title) => {
+    let value, period;
+    if (type === 'pe') {
+      value = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
+      period = 'Current';
+    }
+    if (type === 'pbv') {
+      value = Number(
+        (
+          (ltp * fundamentalsBasic.totalShares) /
+          fundamentalsBasic.screener.bookValue.value
+        ).toFixed(2)
+      );
+      period = fundamentalsBasic.screener.bookValue.period;
+    }
+    if (type === 'pcf') {
+      value = Number(
+        (ltp / fundamentalsBasic.screener.nocfpsQuarterly.value).toFixed(2)
+      );
+      period = fundamentalsBasic.screener.nocfpsQuarterly.period;
+    }
+
+    const sectorData = sectorRatio
+      .map((item) => ({
+        tradingCode: item.tradingCode,
+        value: item[type],
+      }))
+      .filter((item) => item.value != null)
+      .sort((a, b) => a.value - b.value);
+
+    const position =
+      sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
+
+    const totalItems = sectorData.length;
+    const median = Math.floor(totalItems / 2);
+
+    const textColor =
+      position === median
+        ? 'primary.main'
+        : position > median
+        ? 'error.main'
+        : 'success.main';
+
+    let positionText = '';
+    if (position === 1) {
+      positionText = '1st';
+    } else if (position === 2) {
+      positionText = '2nd';
+    } else if (position === 3) {
+      positionText = '3rd';
+    } else if (position > 3) {
+      positionText = position.toString() + 'th';
+    }
+    return {
+      value,
+      period,
+      min: sectorData[0].value,
+      max: sectorData[totalItems - 1].value,
+      comment: positionText + ' in sector(out of ' + totalItems + ')',
+      overview:
+        title +
+        ' of ' +
+        tradingCode +
+        ' is at ' +
+        positionText +
+        ' position in sector where total number of stocks in sector is ' +
+        totalItems,
+      color: textColor,
+    };
   };
 
-  let roe = [];
-  let roce = [];
-  let de = [];
-  let profitMargin = [];
-  let divPayoutRatio = [];
-
-  for (let i = 0; i < dataLength; i++) {
-    const year = fundamentalsBasic.totalAsset[i].year;
-
-    const profit =
-      fundamentalsBasic.profitYearly.find((item) => item.year === year)?.value *
-      1000000; // from mn to taka //
-    const asset = fundamentalsBasic.totalAsset.find(
-      (item) => item.year === year
-    ).value;
-    const totalCurrentLiabilities =
-      fundamentalsBasic.totalCurrentLiabilities.find(
-        (item) => item.year === year
-      ).value;
-    const totalNonCurrentLiabilities =
-      fundamentalsBasic.totalNonCurrentLiabilities.find(
-        (item) => item.year === year
-      ).value;
-    const shareholderEquity = fundamentalsBasic.shareholderEquity.find(
-      (item) => item.year === year
-    ).value;
-    const ebit = fundamentalsBasic.ebit.find(
-      (item) => item.year === year
-    ).value;
-    const revenue = fundamentalsBasic.revenue.find(
-      (item) => item.year === year
-    ).value;
-    const cashDividend = fundamentalsBasic.cashDividend.find(
-      (item) => item.year === year
-    )?.value;
-    const epsYearly = fundamentalsBasic.epsYearly.find(
-      (item) => item.year === year
-    )?.value;
-
-    if (profit) {
-      roe.push({
-        year: year,
-        value: Number((profit / shareholderEquity).toFixed(3)),
-      });
-      profitMargin.push({
-        year: year,
-        value: Number((revenue / profit).toFixed(3)),
-      });
-    }
-    roce.push({
-      year: year,
-      value: Number((ebit / (asset - totalCurrentLiabilities)).toFixed(3)),
-    });
-    de.push({
-      year: year,
-      value: Number(
-        (
-          (totalCurrentLiabilities + totalNonCurrentLiabilities) /
-          shareholderEquity
-        ).toFixed(3)
-      ),
-    });
-
-    if (cashDividend && epsYearly) {
-      divPayoutRatio.push({
-        year: year,
-        value: Number(
-          (
-            (cashDividend * 100) /
-            (fundamentalsBasic.faceValue * epsYearly)
-          ).toFixed(3)
-        ),
-      });
-    }
-  }
-
-  const peRatio = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
-  const priceToBookValueRatio = Number(
-    (
-      (ltp * fundamentalsBasic.totalShares) /
-      (fundamentalsBasic.totalAsset[dataLength - 1].value -
-        fundamentalsBasic.totalCurrentLiabilities[dataLength - 1].value -
-        fundamentalsBasic.totalNonCurrentLiabilities[dataLength - 1].value)
-    ).toFixed(2)
-  );
   const fundamentalsExtended = {
     circuitUp,
     circuitLow,
-    roe,
-    de,
-    roce,
-    profitMargin,
-    divPayoutRatio,
-    peRatio,
-    priceToBookValueRatio,
-    marketCap: Number(
-      ((ltp * fundamentalsBasic.totalShares) / 10000000).toFixed(3)
-    ),
-    sectorPeRatio: {
-      min: peValues[0],
-      median: getMedian(peValues),
-      max: peValues[peValues.length - 1],
-      items: peValues.length,
-      position: peValues.findIndex((item) => item === peRatio),
-    },
-    sectorPbvRatio: {
-      min: pbvValues[0],
-      median: getMedian(pbvValues),
-      max: pbvValues[pbvValues.length - 1],
-      items: pbvValues.length,
-      position: pbvValues.findIndex((item) => item === priceToBookValueRatio),
-    },
+    pe: formatRatioValues('pe', 'P/E ratio'),
+    pcf: formatRatioValues('pcf', 'P/CF ratio'),
+    pbv: formatRatioValues('pbv', 'P/BV ratio'),
+    // roe,
+    // de,
+    // roce,
+    // totalLiabilities,
+    // profitMargin,
+    // divPayoutRatio,
+    // peRatio,
+    // marketCap: Number(
+    //   ((ltp * fundamentalsBasic.totalShares) / 10000000).toFixed(3)
+    // ),
+    // sectorPeRatio: {
+    //   min: peValues[0],
+    //   median: getMedian(peValues),
+    //   max: peValues[peValues.length - 1],
+    //   items: peValues.length,
+    //   position: peValues.findIndex((item) => item === peRatio),
+    // },
+    // sectorPbvRatio: {
+    //   min: pbvValues[0],
+    //   median: getMedian(pbvValues),
+    //   max: pbvValues[pbvValues.length - 1],
+    //   items: pbvValues.length,
+    //   position: pbvValues.findIndex((item) => item === priceToBookValueRatio),
+    // },
   };
 
   res.status(200).json({
-    fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
     ...minutePrice[0],
     ...dailyPrice[0],
+    fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
   });
 };
 
@@ -1954,6 +2006,645 @@ const allGainerLoser = async (req, res, next) => {
 };
 
 /*
+  @api:       GET /api/prices/screener
+  @desc:      get latest index data
+  @access:    public
+*/
+const screener = async (req, res, next) => {
+  console.log(req.body);
+
+  const body = req.body;
+
+  filters = {};
+
+  for (key in body) {
+    filters[key] = {};
+    const value = body[key].split(';');
+
+    if (['sector', 'category'].indexOf(key) != -1) {
+      filters[key]['$eq'] = value[0].toString();
+    } else {
+      const minvalue = value[0];
+      const maxvalue = value[1];
+
+      if (minvalue !== 'null') filters[key]['$gte'] = Number(minvalue);
+      if (maxvalue !== 'null') filters[key]['$lte'] = Number(maxvalue);
+    }
+
+    console.log(filters);
+  }
+
+  const data = await Fundamental.aggregate([
+    {
+      $lookup: {
+        from: 'latest_prices',
+        localField: 'tradingCode',
+        foreignField: 'tradingCode',
+        as: 'latest_prices',
+      },
+    },
+    {
+      $unwind: '$latest_prices',
+    },
+    {
+      $addFields: {
+        ltp: {
+          $cond: [
+            { $gt: ['$latest_prices.ltp', 0] },
+            '$latest_prices.ltp',
+            '$latest_prices.ycp',
+          ],
+        },
+        epsCurrent: {
+          $cond: [{ $eq: ['$epsCurrent', 0] }, 0.000001, '$epsCurrent'],
+        },
+      },
+    },
+    {
+      $project: {
+        id: '$_id',
+        tradingCode: 1,
+        sector: 1,
+        ltp: 1,
+        volume: '$latest_prices.volume',
+        category: 1,
+        marketCap: {
+          $divide: ['$marketCap', 10],
+        },
+        pe: {
+          $round: [{ $divide: ['$ltp', '$epsCurrent'] }, 2],
+        },
+        // revenue: '$screener.revenue.value',
+        revenueGrowthOneYear: '$screener.revenue.percentChange',
+      },
+    },
+    {
+      $match: {
+        ...filters,
+      },
+    },
+    {
+      $sort: {
+        tradingCode: 1,
+      },
+    },
+  ]);
+
+  res.json(data);
+
+  /*
+  // const { marketCap } = req.body;
+  const {
+    sector,
+    peRatio,
+    marketCap,
+    priceToBookValueRatio,
+    revenue,
+    epsGrowthYearly,
+    navGrowthYearly,
+    epsGrowthQuartely,
+    totalShares,
+    priceMin,
+    priceMax,
+    change,
+    cashDividend,
+    floor,
+    directorShare,
+    foreignShare,
+    instituteShare,
+    publicShare,
+    instituteOwnershipChange,
+  } = url.parse(req.url, true).query;
+
+  filters = {};
+
+  if (sector) {
+    filters.sector = sectorList.find((item) => item.tag === sector).name;
+  }
+
+  if (priceMin && priceMax) {
+    filters.ltp = {
+      $gte: priceMin,
+      $lte: priceMax,
+    };
+  }
+
+  if (floor) {
+    if (floor === '1') {
+      filters['$expr'] = { $eq: ['$ltp', '$floorPrice'] };
+    } else if (floor === '0') {
+      filters['$expr'] = { $gt: ['$ltp', '$floorPrice'] };
+    }
+  }
+
+  if (change) {
+    if (change === 'positive') {
+      filters.change = {
+        $gt: 0,
+      };
+    } else if (change === 'negative') {
+      filters.change = {
+        $lt: 0,
+      };
+    } else if (change === 'unchanged') {
+      filters.change = {
+        $eq: 0,
+      };
+    }
+  }
+
+  if (epsGrowthYearly) {
+    if (epsGrowthYearly === 'positive') {
+      filters.epsGrowthYearly = {
+        $gt: 0,
+      };
+    } else if (epsGrowthYearly === 'negative') {
+      filters.epsGrowthYearly = {
+        $lt: 0,
+      };
+    } else if (epsGrowthYearly === 'unchanged') {
+      filters.epsGrowthYearly = {
+        $eq: 0,
+      };
+    }
+  }
+
+  if (navGrowthYearly) {
+    if (navGrowthYearly === 'positive') {
+      filters.navGrowthYearly = {
+        $gt: 0,
+      };
+    } else if (navGrowthYearly === 'negative') {
+      filters.navGrowthYearly = {
+        $lt: 0,
+      };
+    } else if (navGrowthYearly === 'unchanged') {
+      filters.navGrowthYearly = {
+        $eq: 0,
+      };
+    }
+  }
+
+  if (epsGrowthQuartely) {
+    if (epsGrowthQuartely === 'positive') {
+      filters.epsGrowthQuartely = {
+        $gt: 0,
+      };
+    } else if (epsGrowthQuartely === 'negative') {
+      filters.epsGrowthQuartely = {
+        $lt: 0,
+      };
+    } else if (epsGrowthQuartely === 'unchanged') {
+      filters.epsGrowthQuartely = {
+        $eq: 0,
+      };
+    }
+  }
+
+  if (cashDividend) {
+    if (cashDividend === '0') {
+      filters.cashDividend = {
+        $eq: 0,
+      };
+    } else if (cashDividend === 'below5') {
+      filters.cashDividend = {
+        $gt: 0,
+        $lte: 5,
+      };
+    } else if (cashDividend === '5to10') {
+      filters.cashDividend = {
+        $gte: 5,
+        $lte: 10,
+      };
+    } else if (cashDividend === 'above10') {
+      filters.cashDividend = {
+        $gt: 10,
+      };
+    }
+  }
+
+  if (marketCap) {
+    if (marketCap === 'below200') {
+      filters.marketCap = {
+        $lt: 2000000000,
+      };
+    } else if (marketCap === '200to500') {
+      filters.marketCap = {
+        $gte: 2000000000,
+        $lte: 5000000000,
+      };
+    } else if (marketCap === '500to1000') {
+      filters.marketCap = {
+        $gte: 5000000000,
+        $lte: 10000000000,
+      };
+    } else if (marketCap === '1000to2000') {
+      filters.marketCap = {
+        $gte: 10000000000,
+        $lte: 20000000000,
+      };
+    } else if (marketCap === 'above2000') {
+      filters.marketCap = {
+        $gt: 20000000000,
+      };
+    }
+  }
+
+  if (totalShares) {
+    if (totalShares === 'below50') {
+      filters.totalShares = {
+        $lt: 5000000,
+      };
+    } else if (totalShares === '50to100') {
+      filters.totalShares = {
+        $gte: 5000000,
+        $lte: 10000000,
+      };
+    } else if (totalShares === '100to200') {
+      filters.totalShares = {
+        $gte: 10000000,
+        $lte: 20000000,
+      };
+    } else if (totalShares === '200to500') {
+      filters.totalShares = {
+        $gte: 20000000,
+        $lte: 50000000,
+      };
+    } else if (totalShares === '500to1000') {
+      filters.totalShares = {
+        $gte: 50000000,
+        $lte: 100000000,
+      };
+    } else if (totalShares === '1000to1500') {
+      filters.totalShares = {
+        $gte: 100000000,
+        $lte: 150000000,
+      };
+    } else if (totalShares === '1500to2000') {
+      filters.totalShares = {
+        $gte: 150000000,
+        $lte: 200000000,
+      };
+    } else if (totalShares === 'above2000') {
+      filters.totalShares = {
+        $gt: 200000000,
+      };
+    }
+  }
+
+  if (priceToBookValueRatio) {
+    if (priceToBookValueRatio === 'below1') {
+      filters.priceToBookValueRatio = {
+        $lt: 1,
+      };
+    } else if (priceToBookValueRatio === '1to5') {
+      filters.priceToBookValueRatio = {
+        $gte: 1,
+        $lte: 5,
+      };
+    } else if (priceToBookValueRatio === 'above5') {
+      filters.priceToBookValueRatio = {
+        $gt: 5,
+      };
+    }
+  }
+
+  if (peRatio) {
+    if (peRatio === 'below10') {
+      filters.peRatio = {
+        $lt: 10,
+      };
+    } else if (peRatio === '10to15') {
+      filters.peRatio = {
+        $gte: 10,
+        $lte: 15,
+      };
+    } else if (peRatio === '15to20') {
+      filters.peRatio = {
+        $gte: 15,
+        $lte: 20,
+      };
+    } else if (peRatio === '20to40') {
+      filters.peRatio = {
+        $gte: 20,
+        $lte: 40,
+      };
+    } else if (peRatio === 'above40') {
+      filters.peRatio = {
+        $gt: 40,
+      };
+    }
+  }
+
+  if (revenue) {
+    if (revenue === 'below50') {
+      filters.revenue = {
+        $lt: 500000000,
+      };
+    } else if (revenue === '50to100') {
+      filters.revenue = {
+        $gte: 500000000,
+        $lte: 1000000000,
+      };
+    } else if (revenue === '100to200') {
+      filters.revenue = {
+        $gte: 1000000000,
+        $lte: 2000000000,
+      };
+    } else if (revenue === 'above200') {
+      filters.revenue = {
+        $gt: 2000000000,
+      };
+    }
+  }
+
+  if (directorShare) {
+    if (directorShare === 'below30') {
+      filters['$or'] = [
+        {
+          'shareHoldingPercentageCurrent.director': {
+            $lt: 30,
+          },
+        },
+        {
+          'shareHoldingPercentageCurrent.govt': {
+            $lt: 30,
+          },
+        },
+      ];
+    }
+    if (directorShare === '30to50') {
+      filters['shareHoldingPercentageCurrent.director'] = {
+        $lte: 50,
+        $gte: 30,
+      };
+    }
+    if (directorShare === 'above50') {
+      filters['shareHoldingPercentageCurrent.director'] = {
+        $gt: 50,
+      };
+    }
+  }
+
+  if (foreignShare) {
+    if (foreignShare === '0') {
+      filters['shareHoldingPercentageCurrent.foreign'] = {
+        $eq: 0,
+      };
+    }
+    if (foreignShare === '0to1') {
+      filters['shareHoldingPercentageCurrent.foreign'] = {
+        $lte: 1,
+        $gt: 0,
+      };
+    }
+    if (foreignShare === '1to5') {
+      filters['shareHoldingPercentageCurrent.foreign'] = {
+        $lte: 5,
+        $gte: 1,
+      };
+    }
+    if (foreignShare === '5to10') {
+      filters['shareHoldingPercentageCurrent.foreign'] = {
+        $lte: 10,
+        $gte: 5,
+      };
+    }
+    if (foreignShare === 'above10') {
+      filters['shareHoldingPercentageCurrent.foreign'] = {
+        $gt: 10,
+      };
+    }
+  }
+
+  if (instituteShare) {
+    if (instituteShare === '0') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $eq: 0,
+      };
+    }
+    if (instituteShare === '0to5') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $lte: 5,
+        $gt: 0,
+      };
+    }
+    if (instituteShare === '5to10') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $lte: 10,
+        $gte: 5,
+      };
+    }
+    if (instituteShare === '10to20') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $lte: 20,
+        $gte: 10,
+      };
+    }
+    if (instituteShare === '20to30') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $lte: 30,
+        $gte: 20,
+      };
+    }
+    if (instituteShare === 'above30') {
+      filters['shareHoldingPercentageCurrent.institute'] = {
+        $gt: 30,
+      };
+    }
+  }
+
+  if (publicShare) {
+    if (publicShare === '0') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $eq: 0,
+      };
+    }
+    if (publicShare === '0to5') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $lte: 5,
+        $gt: 0,
+      };
+    }
+    if (publicShare === '5to10') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $lte: 10,
+        $gte: 5,
+      };
+    }
+    if (publicShare === '10to20') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $lte: 20,
+        $gte: 10,
+      };
+    }
+    if (publicShare === '20to30') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $lte: 30,
+        $gte: 20,
+      };
+    }
+    if (publicShare === 'above30') {
+      filters['shareHoldingPercentageCurrent.public'] = {
+        $gt: 30,
+      };
+    }
+  }
+
+  if (instituteOwnershipChange) {
+    if (instituteOwnershipChange === 'positive') {
+      filters.instituteOwnershipChange = {
+        $gt: 0,
+      };
+    } else if (instituteOwnershipChange === 'negative') {
+      filters.instituteOwnershipChange = {
+        $lt: 0,
+      };
+    } else if (instituteOwnershipChange === 'unchanged') {
+      filters.instituteOwnershipChange = {
+        $eq: 0,
+      };
+    }
+  }
+
+  if (directorOwnershipChange) {
+    if (directorOwnershipChange === 'positive') {
+      filters.directorOwnershipChange = {
+        $gt: 0,
+      };
+    } else if (directorOwnershipChange === 'negative') {
+      filters.directorOwnershipChange = {
+        $lt: 0,
+      };
+    } else if (directorOwnershipChange === 'unchanged') {
+      filters.directorOwnershipChange = {
+        $eq: 0,
+      };
+    }
+  }
+
+  console.log(filters);
+
+  const data = await Fundamental.aggregate([
+    {
+      $lookup: {
+        from: 'latest_prices',
+        localField: 'tradingCode',
+        foreignField: 'tradingCode',
+        as: 'latest_prices',
+      },
+    },
+    {
+      $unwind: '$latest_prices',
+    },
+    {
+      $addFields: {
+        ltp: {
+          $cond: [
+            { $gt: ['$latest_prices.ltp', 0] },
+            '$latest_prices.ltp',
+            '$latest_prices.ycp',
+          ],
+        },
+        epsYearlySorted: {
+          $sortArray: { input: '$epsYearly', sortBy: { year: -1 } },
+        },
+        navYearlySorted: {
+          $sortArray: { input: '$navYearly', sortBy: { year: -1 } },
+        },
+        cashDivSorted: {
+          $sortArray: { input: '$cashDividend', sortBy: { year: -1 } },
+        },
+        stockDivSorted: {
+          $sortArray: { input: '$stockDividend', sortBy: { year: -1 } },
+        },
+      },
+    },
+    {
+      $project: {
+        tradingCode: 1,
+        ltp: 1,
+        change: '$latest_prices.change',
+        cashDividend: { $first: '$cashDivSorted.value' },
+        stockDividend: { $first: '$stockDivSorted.value' },
+        shareHoldingPercentageCurrent: { $last: '$shareHoldingPercentage' },
+        instituteOwnershipChange: {
+          $subtract: [
+            { $arrayElemAt: ['$shareHoldingPercentage.institute', -1] },
+            { $arrayElemAt: ['$shareHoldingPercentage.institute', -2] },
+          ],
+        },
+        directorOwnershipChange: {
+          $subtract: [
+            { $arrayElemAt: ['$shareHoldingPercentage.director', -1] },
+            { $arrayElemAt: ['$shareHoldingPercentage.director', -2] },
+          ],
+        },
+        epsGrowthYearly: {
+          $subtract: [
+            { $arrayElemAt: ['$epsYearlySorted.value', 0] },
+            { $arrayElemAt: ['$epsYearlySorted.value', 1] },
+          ],
+        },
+        navGrowthYearly: {
+          $subtract: [
+            { $arrayElemAt: ['$navYearlySorted.value', 0] },
+            { $arrayElemAt: ['$navYearlySorted.value', 1] },
+          ],
+        },
+        marketCap: { $multiply: ['$totalShares', '$ltp'] },
+        marketCap: 1,
+        peRatio: {
+          $multiply: ['$epsCurrent', '$ltp'],
+        },
+        priceToBookValueRatio: {
+          $divide: [
+            {
+              $multiply: ['$totalShares', '$ltp'],
+            },
+            {
+              $subtract: [
+                {
+                  $last: '$totalAsset.value',
+                },
+
+                {
+                  $add: [
+                    {
+                      $last: '$totalCurrentLiabilities.value',
+                    },
+                    {
+                      $last: '$totalNonCurrentLiabilities.value',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        floorPrice: 1,
+        revenue: {
+          $last: '$revenue.value',
+        },
+      },
+    },
+    {
+      $match: {
+        ...filters,
+      },
+    },
+    // {
+    //   $sort: {
+    //     marketCap: 1,
+    //   },
+    // },
+  ]);
+
+  res.status(200).json(data);
+  */
+};
+
+/*
   test function
 */
 const pytest = async (req, res, next) => {
@@ -2050,5 +2741,6 @@ module.exports = {
   newsByStock,
   blocktrByStock,
   allGainerLoser,
+  screener,
   pytest,
 };
