@@ -36,6 +36,27 @@ const circuitMoveRange = [
 
 stocksListDetails = [
   {
+    tradingCode: 'DSEX',
+    companyName: 'Dhaka Stock Exchange Index',
+    sector: '',
+    yearEnd: '',
+    category: '',
+  },
+  {
+    tradingCode: 'DSES',
+    companyName: 'Dhaka Stock Exchange Shariah Index',
+    sector: '',
+    yearEnd: '',
+    category: '',
+  },
+  {
+    tradingCode: 'DSE30',
+    companyName: 'Dhaka Stock Exchange 30 Index',
+    sector: '',
+    yearEnd: '',
+    category: '',
+  },
+  {
     tradingCode: 'DBH',
     companyName: 'DBH Finance PLC.',
     sector: 'Financial Institutions',

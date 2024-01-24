@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
-const dailyPriceSchema = mongoose.Schema(
+const dayMinutePriceSchema = mongoose.Schema(
   {
-    date: {
+    time: {
       type: Date,
       required: true,
     },
@@ -16,6 +16,6 @@ const dailyPriceSchema = mongoose.Schema(
   }
 );
 
-const Dp = mongoose.model('Dp', dailyPriceSchema);
+const DayMinutePrice = mongoose.model('Day_minute_price', dayMinutePriceSchema);
 
-module.exports = Dp;
+module.exports = DayMinutePrice;

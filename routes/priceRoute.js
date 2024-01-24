@@ -12,6 +12,8 @@ const {
   blocktrByStock,
   screener,
   pytest,
+  getSymbolTvchart,
+  getBarsTvchart,
 } = require('../controllers/priceController');
 
 const router = express.Router();
@@ -37,6 +39,10 @@ router.route('/indexMinuteData').get(indexMinuteData);
 router.route('/screener').post(screener);
 
 router.route('/pytest').get(pytest);
+
+router.route('/getSymbolTvchart').get(getSymbolTvchart);
+
+router.route('/getBarsTvchart').get(getBarsTvchart);
 
 router.route('/test').post(async () => {
   await axios.request({

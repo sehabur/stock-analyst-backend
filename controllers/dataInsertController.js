@@ -151,6 +151,8 @@ const insertFinanceData = async (req, res, next) => {
 
     let years = Object.keys(stock[0]).filter((item) => item.startsWith('20'));
 
+    // console.log(stock[0].tradingCode)
+
     for (data of stock) {
       const param = datamap.find((item) => item.text === data.parameter).value;
 
@@ -184,7 +186,7 @@ const insertFinanceData = async (req, res, next) => {
     let currentRatio = [];
     let capitalEmployed = [];
     let roa = [];
-    console.log(data.tradingCode);
+    // console.log(data.tradingCode);
     for (let i = 0; i < data.values.totalAsset.length; i++) {
       const year = data.values.totalAsset[i].year;
 
@@ -192,22 +194,22 @@ const insertFinanceData = async (req, res, next) => {
         year: year,
         value: Number(
           data.values.totalNonCurrentLiabilities[i].value +
-            data.values.totalCurrentLiabilities[i].value
+          data.values.totalCurrentLiabilities[i].value
         ),
       });
       bookValue.push({
         year: year,
         value: Number(
           data.values.totalAsset[i].value -
-            (data.values.totalNonCurrentLiabilities[i].value +
-              data.values.totalCurrentLiabilities[i].value)
+          (data.values.totalNonCurrentLiabilities[i].value +
+            data.values.totalCurrentLiabilities[i].value)
         ),
       });
       capitalEmployed.push({
         year: year,
         value: Number(
           data.values.totalAsset[i].value -
-            data.values.totalCurrentLiabilities[i].value
+          data.values.totalCurrentLiabilities[i].value
         ),
       });
       roa.push({
@@ -291,6 +293,8 @@ const insertFinanceData = async (req, res, next) => {
 
     dataPush.push(data);
   }
+
+  // res.json(dataPush);
 
   for (item of dataPush) {
     const tradingCode = item.tradingCode;

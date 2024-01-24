@@ -1,5 +1,7 @@
 const url = require('url');
 const { DateTime } = require('luxon');
+const createError = require('http-errors');
+
 const MinutePrice = require('../models/minutePriceModel');
 const Fundamental = require('../models/fundamentalModel');
 const DailyPrice = require('../models/dailyPriceModel');
@@ -8,12 +10,165 @@ const LatestPrice = require('../models/latestPriceModel');
 const News = require('../models/newsModel');
 const BlockTr = require('../models/BlockTrModel');
 const MinuteIndex = require('../models/minuteIndexModel');
+const DailyIndex = require('../models/dailyIndexModel');
 const Setting = require('../models/settingModel');
 const {
   sectorList,
   stocksListDetails,
   circuitMoveRange,
 } = require('../data/dse');
+const DayMinutePrice = require('../models/onedayMinutePriceModel');
+
+const getSymbolTvchart = async (req, res) => {
+  let data = stocksListDetails.map((item) => ({
+    tradingCode: item.tradingCode,
+    companyName: item.companyName,
+  }));
+
+  res.status(200).json({
+    Data: {
+      DSE: {
+        stocks: data,
+      },
+    },
+  });
+};
+
+const getBarsTvchart = async (req, res) => {
+  const { exchange, symbol, resolutionType, fromTime, toTime, limit } = url.parse(
+    req.url,
+    true
+  ).query;
+
+  if (['DSEX', 'DSES', 'DSE30'].includes(symbol)) {
+    let index;
+    if (resolutionType === 'intraday') {
+      index = await MinuteIndex.aggregate([
+        {
+          $match: {
+            time: {
+              $gte: new Date(fromTime * 1000),
+              $lte: new Date(toTime * 1000),
+            }
+          },
+        },
+        {
+          $sort: {
+            time: 1,
+          },
+        },
+        {
+          $project: {
+            time: { $toLong: '$time' },
+            ycp: '$dsex.index',
+            close: '$dsex.index',
+            high: '$dsex.index',
+            low: '$dsex.index',
+            volume: '$totalVolume',
+          },
+        },
+      ]);
+    } else {
+      index = await DailyIndex.aggregate([
+        {
+          $match: {
+            date: {
+              $gte: new Date(fromTime * 1000),
+              $lte: new Date(toTime * 1000),
+            }
+          },
+        },
+        {
+          $sort: {
+            date: 1,
+          },
+        },
+        {
+          $project: {
+            date: { $toLong: '$date' },
+            ycp: '$dsex.index',
+            close: '$dsex.index',
+            high: '$dsex.index',
+            low: '$dsex.index',
+            volume: '$totalVolume',
+          },
+        },
+      ]);
+    }
+    let indexdata = {
+      Response: 'Success',
+      Data: index,
+    };
+    res.status(200).json(indexdata);
+  }
+
+  let latestPrice;
+
+  if (resolutionType === 'intraday') {
+    latestPrice = await MinutePrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          time: {
+            $gte: new Date(fromTime * 1000),
+            $lte: new Date(toTime * 1000),
+          }
+        },
+      },
+      {
+        $sort: {
+          time: 1,
+        },
+      },
+      {
+        $project: {
+          time: { $toLong: '$time' },
+          ycp: 1,
+          close: '$ltp',
+          high: 1,
+          low: 1,
+          volume: 1,
+        },
+      },
+    ]);
+  } else {
+    latestPrice = await DailyPrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          date: {
+            $gte: new Date(fromTime * 1000),
+            $lte: new Date(toTime * 1000),
+          }
+        },
+      },
+      {
+        $sort: {
+          date: 1,
+        },
+      },
+
+      {
+        $project: {
+          time: { $toLong: '$date' },
+          open: '$ycp',
+          close: '$ltp',
+          high: 1,
+          low: 1,
+          volume: 1,
+        },
+      },
+    ]);
+
+  }
+
+  let data = {
+    Response: 'Success',
+    Data: latestPrice,
+  };
+  res.status(200).json(data);
+
+};
 
 /*
   @api:       GET /api/prices/latestPrice/
@@ -705,513 +860,395 @@ const dailySectorPrice = async (req, res, next) => {
   @access:    public
 */
 const stockDetails = async (req, res, next) => {
-  const tradingCode = req.params.code;
+  try {
+    const tradingCode = req.params.code;
 
-  const { period } = url.parse(req.url, true).query;
+    const { period } = url.parse(req.url, true).query;
 
-  const queryLimit = period ? Number(period) : 260; // default to 1 year //
+    const queryLimit = period ? Number(period) : 260; // default to 1 year //
 
-  const sector = stocksListDetails.find(
-    (stock) => stock.tradingCode === tradingCode
-  ).sector;
+    const sector = stocksListDetails.find(
+      (stock) => stock.tradingCode === tradingCode
+    ).sector;
 
-  const { dailyPriceUpdateDate, minuteDataUpdateDate } =
-    await Setting.findOne().select('dailyPriceUpdateDate minuteDataUpdateDate');
+    const { dailyPriceUpdateDate, minuteDataUpdateDate } =
+      await Setting.findOne().select('dailyPriceUpdateDate minuteDataUpdateDate');
 
-  const minutePrice = await MinutePrice.aggregate([
-    {
-      $facet: {
-        latest: [
-          {
-            $match: {
-              tradingCode,
-              date: minuteDataUpdateDate,
-            },
-          },
-          {
-            $sort: {
-              time: -1,
-            },
-          },
-          {
-            $limit: 1,
-          },
-        ],
-        minute: [
-          {
-            $match: {
-              tradingCode,
-              date: minuteDataUpdateDate,
-            },
-          },
-          {
-            $project: {
-              time: 1,
-              close: 1,
-              ltp: 1,
-              ycp: 1,
-            },
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-        ],
+    const minutePrice = await DayMinutePrice.aggregate([
+      {
+        $match: {
+          tradingCode,
+        },
       },
-    },
-    {
-      $unwind: '$latest',
-    },
-  ]);
-
-  const dailyPrice = await DailyPrice.aggregate([
-    {
-      $match: {
-        tradingCode,
-      },
-    },
-    {
-      $sort: {
-        date: -1,
-      },
-    },
-    {
-      $limit: queryLimit,
-    },
-    {
-      $sort: {
-        date: 1,
-      },
-    },
-    {
-      $unionWith: {
-        coll: 'latest_prices',
-        pipeline: [
-          {
-            $match: {
-              tradingCode: tradingCode,
-              date: {
-                $gt: dailyPriceUpdateDate,
+      {
+        $facet: {
+          latest: [
+            {
+              $sort: {
+                time: -1,
               },
             },
-          },
-        ],
-      },
-    },
-    {
-      $facet: {
-        lastDay: [
-          {
-            $match: {
-              date: {
-                $lt: minuteDataUpdateDate,
+            {
+              $limit: 1,
+            },
+          ],
+          minute: [
+            {
+              $sort: {
+                time: 1,
               },
             },
-          },
-          {
-            $sort: {
-              date: -1,
+            {
+              $project: {
+                time: 1,
+                close: 1,
+                ltp: 1,
+                ycp: 1,
+              },
             },
-          },
-          {
-            $limit: 1,
-          },
-        ],
-        daily: [
-          {
-            $project: {
-              date: 1,
-              open: '$ycp',
-              high: 1,
-              low: 1,
-              close: 1,
-              volume: 1,
+          ],
+        },
+      },
+      {
+        $unwind: '$latest',
+      },
+    ]);
+
+    const dailyPrice = await DailyPrice.aggregate([
+      {
+        $match: {
+          tradingCode,
+        },
+      },
+      {
+        $sort: {
+          date: -1,
+        },
+      },
+      {
+        $limit: queryLimit,
+      },
+      {
+        $sort: {
+          date: 1,
+        },
+      },
+      {
+        $unionWith: {
+          coll: 'latest_prices',
+          pipeline: [
+            {
+              $match: {
+                tradingCode: tradingCode,
+                date: {
+                  $gt: dailyPriceUpdateDate,
+                },
+              },
             },
-          },
-        ],
-        weekly: [
-          {
-            $addFields: {
-              startOfWeek: {
-                $toDate: {
-                  $subtract: [
-                    '$date',
-                    {
-                      $multiply: [
-                        {
-                          $subtract: [
-                            {
-                              $dayOfWeek: '$date',
-                            },
-                            1,
-                          ],
-                        },
-                        24 * 60 * 60 * 1000,
-                      ],
+          ],
+        },
+      },
+      {
+        $facet: {
+          lastDay: [
+            {
+              $match: {
+                date: {
+                  $lt: minuteDataUpdateDate,
+                },
+              },
+            },
+            {
+              $sort: {
+                date: -1,
+              },
+            },
+            {
+              $limit: 1,
+            },
+          ],
+          daily: [
+            {
+              $project: {
+                date: 1,
+                open: '$ycp',
+                high: 1,
+                low: 1,
+                close: 1,
+                volume: 1,
+              },
+            },
+          ],
+          weekly: [
+            {
+              $addFields: {
+                startOfWeek: {
+                  $toDate: {
+                    $subtract: [
+                      '$date',
+                      {
+                        $multiply: [
+                          {
+                            $subtract: [
+                              {
+                                $dayOfWeek: '$date',
+                              },
+                              1,
+                            ],
+                          },
+                          24 * 60 * 60 * 1000,
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: '$startOfWeek',
+                open: { $first: '$ycp' },
+                high: { $max: '$high' },
+                low: { $min: '$low' },
+                close: { $last: '$close' },
+                trade: { $sum: '$trade' },
+                volume: { $sum: '$volume' },
+                value: { $sum: '$value' },
+              },
+            },
+            {
+              $addFields: {
+                date: '$_id',
+              },
+            },
+            {
+              $sort: {
+                _id: 1,
+              },
+            },
+          ],
+          monthly: [
+            {
+              $addFields: {
+                startOfMonth: {
+                  $dateFromParts: {
+                    year: {
+                      $year: { date: '$date', timezone: 'Asia/Dhaka' },
                     },
+                    month: {
+                      $month: { date: '$date', timezone: 'Asia/Dhaka' },
+                    },
+                    day: 1,
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: '$startOfMonth',
+                open: { $first: '$ycp' },
+                high: { $max: '$high' },
+                low: { $min: '$low' },
+                close: { $last: '$close' },
+                trade: { $sum: '$trade' },
+                volume: { $sum: '$volume' },
+                value: { $sum: '$value' },
+              },
+            },
+            {
+              $addFields: {
+                date: '$_id',
+              },
+            },
+            {
+              $sort: {
+                _id: 1,
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: '$lastDay',
+      },
+    ]);
+
+    const fundamentalsBasic = await Fundamental.findOne({ tradingCode });
+
+    const sectorRatio = await Fundamental.aggregate([
+      {
+        $match: {
+          sector,
+        },
+      },
+      {
+        $lookup: {
+          from: 'latest_prices',
+          localField: 'tradingCode',
+          foreignField: 'tradingCode',
+          as: 'latest_prices',
+        },
+      },
+      {
+        $unwind: '$latest_prices',
+      },
+      {
+        $addFields: {
+          ltp: {
+            $cond: [
+              { $gt: ['$latest_prices.ltp', 0] },
+              '$latest_prices.ltp',
+              '$latest_prices.ycp',
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          tradingCode: 1,
+          pe: {
+            $round: [
+              {
+                $divide: ['$ltp', '$epsCurrent'],
+              },
+              2,
+            ],
+          },
+          pbv: {
+            $round: [
+              {
+                $divide: [
+                  {
+                    $multiply: ['$ltp', '$totalShares'],
+                  },
+                  '$screener.bookValue.value',
+                ],
+              },
+              2,
+            ],
+          },
+          pcf: {
+            $round: [
+              {
+                $divide: ['$ltp', {
+                  $cond: [
+                    { $eq: ['$screener.nocfpsQuarterly.value', 0] },
+                    0.000001,
+                    '$screener.nocfpsQuarterly.value',
                   ],
-                },
+                },],
               },
-            },
+              2,
+            ],
           },
-          {
-            $group: {
-              _id: '$startOfWeek',
-              open: { $first: '$ycp' },
-              high: { $max: '$high' },
-              low: { $min: '$low' },
-              close: { $last: '$close' },
-              trade: { $sum: '$trade' },
-              volume: { $sum: '$volume' },
-              value: { $sum: '$value' },
-            },
-          },
-          {
-            $addFields: {
-              date: '$_id',
-            },
-          },
-          {
-            $sort: {
-              _id: 1,
-            },
-          },
-        ],
-        monthly: [
-          {
-            $addFields: {
-              startOfMonth: {
-                $dateFromParts: {
-                  year: {
-                    $year: { date: '$date', timezone: 'Asia/Dhaka' },
-                  },
-                  month: {
-                    $month: { date: '$date', timezone: 'Asia/Dhaka' },
-                  },
-                  day: 1,
-                },
-              },
-            },
-          },
-          {
-            $group: {
-              _id: '$startOfMonth',
-              open: { $first: '$ycp' },
-              high: { $max: '$high' },
-              low: { $min: '$low' },
-              close: { $last: '$close' },
-              trade: { $sum: '$trade' },
-              volume: { $sum: '$volume' },
-              value: { $sum: '$value' },
-            },
-          },
-          {
-            $addFields: {
-              date: '$_id',
-            },
-          },
-          {
-            $sort: {
-              _id: 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $unwind: '$lastDay',
-    },
-  ]);
 
-  const fundamentalsBasic = await Fundamental.findOne({ tradingCode });
-
-  const sectorRatio = await Fundamental.aggregate([
-    {
-      $match: {
-        sector,
-      },
-    },
-    {
-      $lookup: {
-        from: 'latest_prices',
-        localField: 'tradingCode',
-        foreignField: 'tradingCode',
-        as: 'latest_prices',
-      },
-    },
-    {
-      $unwind: '$latest_prices',
-    },
-    {
-      $addFields: {
-        ltp: {
-          $cond: [
-            { $gt: ['$latest_prices.ltp', 0] },
-            '$latest_prices.ltp',
-            '$latest_prices.ycp',
-          ],
+          _id: 0,
         },
       },
-    },
-    {
-      $project: {
-        tradingCode: 1,
-        pe: {
-          $round: [
-            {
-              $divide: ['$ltp', '$epsCurrent'],
-            },
-            2,
-          ],
-        },
-        pbv: {
-          $round: [
-            {
-              $divide: [
-                {
-                  $multiply: ['$ltp', '$totalShares'],
-                },
-                '$screener.bookValue.value',
-              ],
-            },
-            2,
-          ],
-        },
-        pcf: {
-          $round: [
-            {
-              $divide: ['$ltp', '$screener.nocfpsQuarterly.value'],
-            },
-            2,
-          ],
-        },
-        _id: 0,
-      },
-    },
-  ]);
+    ]);
 
-  const latestPrice = minutePrice[0].latest;
+    const latestPrice = minutePrice[0].latest;
 
-  const ltp = latestPrice.ltp > 0 ? latestPrice.ltp : latestPrice.ycp;
+    const ltp = latestPrice.ltp > 0 ? latestPrice.ltp : latestPrice.ycp;
 
-  const circuitRange = circuitMoveRange.find(
-    (item) => ltp > item.min && ltp < item.max
-  ).value;
+    const circuitRange = circuitMoveRange.find(
+      (item) => ltp > item.min && ltp < item.max
+    ).value;
 
-  const circuitUp = Number(
-    Math.floor(ltp + (ltp * circuitRange) / 100).toFixed(1)
-  );
-  const circuitLow = Number((ltp - (ltp * circuitRange) / 100).toFixed(1));
+    const circuitUp = Number(
+      Math.floor(ltp + (ltp * circuitRange) / 100).toFixed(1)
+    );
+    const circuitLow = Number((ltp - (ltp * circuitRange) / 100).toFixed(1));
 
-  // const getMedian = (values) => {
-  //   const half = Math.floor(values.length / 2);
-  //   return Number(
-  //     (values.length % 2
-  //       ? values[half]
-  //       : (values[half - 1] + values[half]) / 2
-  //     ).toFixed(2)
-  //   );
-  // };
+    const formatRatioValues = (type, title) => {
+      let value, period;
+      if (type === 'pe') {
+        value = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
+        period = 'Current';
+      }
+      if (type === 'pbv') {
+        value = Number(
+          (
+            (ltp * fundamentalsBasic.totalShares) /
+            fundamentalsBasic.screener.bookValue.value
+          ).toFixed(2)
+        );
+        period = fundamentalsBasic.screener.bookValue.period;
+      }
+      if (type === 'pcf') {
+        value = Number(
+          (ltp / fundamentalsBasic.screener.nocfpsQuarterly.value).toFixed(2)
+        );
+        period = fundamentalsBasic.screener.nocfpsQuarterly.period;
+      }
 
-  // let roe = [];
-  // let roce = [];
-  // let de = [];
-  // let profitMargin = [];
-  // let divPayoutRatio = [];
-  // let totalLiabilities = [];
+      const sectorData = sectorRatio
+        .map((item) => ({
+          tradingCode: item.tradingCode,
+          value: item[type],
+        }))
+        .filter((item) => item.value != null)
+        .sort((a, b) => a.value - b.value);
 
-  // for (let i = 0; i < dataLength; i++) {
-  //   const year = fundamentalsBasic.totalAsset[i].year;
+      const position =
+        sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
 
-  //   const profit =
-  //     fundamentalsBasic.profitYearly.find((item) => item.year === year)?.value *
-  //     1000000; // from mn to taka //
-  //   const asset = fundamentalsBasic.totalAsset.find(
-  //     (item) => item.year === year
-  //   ).value;
-  //   const totalCurrentLiabilities =
-  //     fundamentalsBasic.totalCurrentLiabilities.find(
-  //       (item) => item.year === year
-  //     ).value;
-  //   const totalNonCurrentLiabilities =
-  //     fundamentalsBasic.totalNonCurrentLiabilities.find(
-  //       (item) => item.year === year
-  //     ).value;
-  //   const shareholderEquity = fundamentalsBasic.shareholderEquity.find(
-  //     (item) => item.year === year
-  //   ).value;
-  //   const ebit = fundamentalsBasic.ebit.find(
-  //     (item) => item.year === year
-  //   ).value;
-  //   const revenue = fundamentalsBasic.revenue.find(
-  //     (item) => item.year === year
-  //   ).value;
-  //   const cashDividend = fundamentalsBasic.cashDividend.find(
-  //     (item) => item.year === year
-  //   )?.value;
-  //   const epsYearly = fundamentalsBasic.epsYearly.find(
-  //     (item) => item.year === year
-  //   )?.value;
+      const totalItems = sectorData.length;
+      const median = Math.floor(totalItems / 2);
 
-  //   if (profit) {
-  //     roe.push({
-  //       year: year,
-  //       value: Number((profit / shareholderEquity).toFixed(3)),
-  //     });
-  //     profitMargin.push({
-  //       year: year,
-  //       value: Number((revenue / profit).toFixed(3)),
-  //     });
-  //   }
-  //   roce.push({
-  //     year: year,
-  //     value: Number((ebit / (asset - totalCurrentLiabilities)).toFixed(3)),
-  //   });
-  //   de.push({
-  //     year: year,
-  //     value: Number(
-  //       (
-  //         (totalCurrentLiabilities + totalNonCurrentLiabilities) /
-  //         shareholderEquity
-  //       ).toFixed(3)
-  //     ),
-  //   });
-  //   totalLiabilities.push({
-  //     year: year,
-  //     value: totalCurrentLiabilities + totalNonCurrentLiabilities,
-  //   });
+      const textColor =
+        position === median
+          ? 'primary.main'
+          : position > median
+            ? 'error.main'
+            : 'success.main';
 
-  //   if (cashDividend && epsYearly) {
-  //     divPayoutRatio.push({
-  //       year: year,
-  //       value: Number(
-  //         (
-  //           (cashDividend * 100) /
-  //           (fundamentalsBasic.faceValue * epsYearly)
-  //         ).toFixed(3)
-  //       ),
-  //     });
-  //   }
-  // }
-
-  // const priceToBookValueRatio = Number(
-  //   (
-  //     (ltp * fundamentalsBasic.totalShares) /
-  //     (fundamentalsBasic.totalAsset[dataLength - 1].value -
-  //       fundamentalsBasic.totalCurrentLiabilities[dataLength - 1].value -
-  //       fundamentalsBasic.totalNonCurrentLiabilities[dataLength - 1].value)
-  //   ).toFixed(2)
-  // );
-
-  const formatRatioValues = (type, title) => {
-    let value, period;
-    if (type === 'pe') {
-      value = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
-      period = 'Current';
-    }
-    if (type === 'pbv') {
-      value = Number(
-        (
-          (ltp * fundamentalsBasic.totalShares) /
-          fundamentalsBasic.screener.bookValue.value
-        ).toFixed(2)
-      );
-      period = fundamentalsBasic.screener.bookValue.period;
-    }
-    if (type === 'pcf') {
-      value = Number(
-        (ltp / fundamentalsBasic.screener.nocfpsQuarterly.value).toFixed(2)
-      );
-      period = fundamentalsBasic.screener.nocfpsQuarterly.period;
-    }
-
-    const sectorData = sectorRatio
-      .map((item) => ({
-        tradingCode: item.tradingCode,
-        value: item[type],
-      }))
-      .filter((item) => item.value != null)
-      .sort((a, b) => a.value - b.value);
-
-    const position =
-      sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
-
-    const totalItems = sectorData.length;
-    const median = Math.floor(totalItems / 2);
-
-    const textColor =
-      position === median
-        ? 'primary.main'
-        : position > median
-        ? 'error.main'
-        : 'success.main';
-
-    let positionText = '';
-    if (position === 1) {
-      positionText = '1st';
-    } else if (position === 2) {
-      positionText = '2nd';
-    } else if (position === 3) {
-      positionText = '3rd';
-    } else if (position > 3) {
-      positionText = position.toString() + 'th';
-    }
-    return {
-      value,
-      period,
-      min: sectorData[0].value,
-      max: sectorData[totalItems - 1].value,
-      comment: positionText + ' in sector(out of ' + totalItems + ')',
-      overview:
-        title +
-        ' of ' +
-        tradingCode +
-        ' is at ' +
-        positionText +
-        ' position in sector where total number of stocks in sector is ' +
-        totalItems,
-      color: textColor,
+      let positionText = '';
+      if (position === 1) {
+        positionText = '1st';
+      } else if (position === 2) {
+        positionText = '2nd';
+      } else if (position === 3) {
+        positionText = '3rd';
+      } else if (position > 3) {
+        positionText = position.toString() + 'th';
+      }
+      return {
+        value,
+        period,
+        min: sectorData[0].value,
+        max: sectorData[totalItems - 1].value,
+        comment: positionText + ' in sector(out of ' + totalItems + ')',
+        overview:
+          title +
+          ' of ' +
+          tradingCode +
+          ' is at ' +
+          positionText +
+          ' position in sector where total number of stocks in sector is ' +
+          totalItems,
+        color: textColor,
+      };
     };
-  };
 
-  const fundamentalsExtended = {
-    circuitUp,
-    circuitLow,
-    pe: formatRatioValues('pe', 'P/E ratio'),
-    pcf: formatRatioValues('pcf', 'P/CF ratio'),
-    pbv: formatRatioValues('pbv', 'P/BV ratio'),
-    // roe,
-    // de,
-    // roce,
-    // totalLiabilities,
-    // profitMargin,
-    // divPayoutRatio,
-    // peRatio,
-    // marketCap: Number(
-    //   ((ltp * fundamentalsBasic.totalShares) / 10000000).toFixed(3)
-    // ),
-    // sectorPeRatio: {
-    //   min: peValues[0],
-    //   median: getMedian(peValues),
-    //   max: peValues[peValues.length - 1],
-    //   items: peValues.length,
-    //   position: peValues.findIndex((item) => item === peRatio),
-    // },
-    // sectorPbvRatio: {
-    //   min: pbvValues[0],
-    //   median: getMedian(pbvValues),
-    //   max: pbvValues[pbvValues.length - 1],
-    //   items: pbvValues.length,
-    //   position: pbvValues.findIndex((item) => item === priceToBookValueRatio),
-    // },
-  };
+    const fundamentalsExtended = {
+      circuitUp,
+      circuitLow,
+      pe: formatRatioValues('pe', 'P/E ratio'),
+      pcf: formatRatioValues('pcf', 'P/CF ratio'),
+      pbv: formatRatioValues('pbv', 'P/BV ratio'),
+    };
 
-  res.status(200).json({
-    ...minutePrice[0],
-    ...dailyPrice[0],
-    fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
-  });
+    res.status(200).json({
+      sectorRatio,
+      ...minutePrice[0],
+      ...dailyPrice[0],
+      fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
+    });
+  } catch (error) {
+    const err = createError(500, 'Error Occured');
+    next(err);
+  }
 };
 
 /*
@@ -2732,6 +2769,8 @@ const pytest = async (req, res, next) => {
 };
 
 module.exports = {
+  getSymbolTvchart,
+  getBarsTvchart,
   latestPrice,
   latestPricesBySearch,
   sectorWiseLatestPrice,
