@@ -1,6 +1,7 @@
-const express = require('express');
-const axios = require('axios');
+const express = require("express");
+const axios = require("axios");
 const {
+  getAllStocks,
   latestPrice,
   latestPricesBySearch,
   sectorWiseLatestPrice,
@@ -14,47 +15,52 @@ const {
   pytest,
   getSymbolTvchart,
   getBarsTvchart,
-} = require('../controllers/priceController');
+  newtest,
+} = require("../controllers/priceController");
 
 const router = express.Router();
 
-router.route('/latestPrice').get(latestPrice);
+router.route("/latestPrice").get(latestPrice);
 
-router.route('/latestPricesBySearch').get(latestPricesBySearch);
+router.route("/getAllStocks").get(getAllStocks);
 
-router.route('/sectorWiseLatestPrice').get(sectorWiseLatestPrice);
+router.route("/latestPricesBySearch").get(latestPricesBySearch);
 
-router.route('/dailySectorPrice/:sectorTag').get(dailySectorPrice);
+router.route("/sectorWiseLatestPrice").get(sectorWiseLatestPrice);
 
-router.route('/stock/:code').get(stockDetails);
+router.route("/dailySectorPrice/:sectorTag").get(dailySectorPrice);
 
-router.route('/news/:code').get(newsByStock);
+router.route("/stock/:code").get(stockDetails);
 
-router.route('/blockTr/:code').get(blocktrByStock);
+router.route("/news/:code").get(newsByStock);
 
-router.route('/allGainerLoser').get(allGainerLoser);
+router.route("/blockTr/:code").get(blocktrByStock);
 
-router.route('/indexMinuteData').get(indexMinuteData);
+router.route("/allGainerLoser").get(allGainerLoser);
 
-router.route('/screener').post(screener);
+router.route("/indexMinuteData").get(indexMinuteData);
 
-router.route('/pytest').get(pytest);
+router.route("/screener").post(screener);
 
-router.route('/getSymbolTvchart').get(getSymbolTvchart);
+router.route("/pytest").get(pytest);
 
-router.route('/getBarsTvchart').get(getBarsTvchart);
+router.route("/getSymbolTvchart").get(getSymbolTvchart);
 
-router.route('/test').post(async () => {
+router.route("/getBarsTvchart").get(getBarsTvchart);
+
+router.route("/newtest").get(newtest);
+
+router.route("/test").post(async () => {
   await axios.request({
-    method: 'post',
-    url: 'https://www.dsebd.org/ajax/load-instrument.php',
+    method: "post",
+    url: "https://www.dsebd.org/ajax/load-instrument.php",
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8:',
-      Host: 'www.dsebd.org',
-      'X-Requested-With': 'XMLHttpRequest',
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8:",
+      Host: "www.dsebd.org",
+      "X-Requested-With": "XMLHttpRequest",
     },
     data: {
-      inst: 'INTRACO',
+      inst: "INTRACO",
     },
   });
 });

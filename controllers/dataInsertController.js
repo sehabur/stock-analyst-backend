@@ -1,7 +1,41 @@
-const Fundamental = require('../models/fundamentalModel');
+const Fundamental = require("../models/fundamentalModel");
 
-const xlsx = require('xlsx');
+const xlsx = require("xlsx");
 
+/*
+  @api:       GET /api/dataInsert/eps/
+  @desc:      insert eps quarterly data to collection 
+  @access:    public
+*/
+const changeSector = async (req, res, next) => {
+  const code = [
+    "DELTALIFE",
+    "FAREASTLIF",
+    "MEGHNALIFE",
+    "NATLIFEINS",
+    "PRAGATILIF",
+    "PRIMELIFE",
+    "PROGRESLIF",
+    "SUNLIFEINS",
+    "POPULARLIF",
+    "RUPALILIFE",
+    "SANDHANINS",
+    "PADMALIFE",
+    "SONALILIFE",
+    "CLICL",
+    "TILIL",
+  ];
+
+  for (item of code) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: item.trim() },
+      { sector: "Life Insurance" }
+    );
+    // console.log(response);
+  }
+
+  res.send("updated");
+};
 /*
   @api:       GET /api/dataInsert/eps/
   @desc:      insert eps quarterly data to collection 
@@ -9,10 +43,10 @@ const xlsx = require('xlsx');
 */
 const insertFloorPrice = async (req, res, next) => {
   const newWorkbook = xlsx.readFile(
-    'E:/MERN_APP/stock-analyst-bd/data/floor_price_list.xlsx'
+    "E:/MERN_APP/stock-analyst-bd/data/floor_price_list.xlsx"
   );
 
-  var xlData = xlsx.utils.sheet_to_json(newWorkbook.Sheets['Sheet1']);
+  var xlData = xlsx.utils.sheet_to_json(newWorkbook.Sheets["Sheet1"]);
 
   for (data of xlData) {
     const response = await Fundamental.findOneAndUpdate(
@@ -22,7 +56,7 @@ const insertFloorPrice = async (req, res, next) => {
     // console.log(response);
   }
 
-  res.send('Floor price updated');
+  res.send("Floor price updated");
 };
 
 /*
@@ -31,16 +65,16 @@ const insertFloorPrice = async (req, res, next) => {
   @access:    public
 */
 const insertEps = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets['eps']);
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["eps"]);
 
   for (data of xlData) {
     const insertData = {
-      year: '2022',
-      q1: data['Q1-2022'],
-      q2: data['Q2-2022'],
-      q3: data['Q3-2022'],
-      q4: data['Q4-2022'],
-      annual: data['annual-2022'],
+      year: "2022",
+      q1: data["Q1-2022"],
+      q2: data["Q2-2022"],
+      q3: data["Q3-2022"],
+      q4: data["Q4-2022"],
+      annual: data["annual-2022"],
     };
     const response = await Fundamental.findOneAndUpdate(
       { tradingCode: data.tradingCode },
@@ -52,22 +86,22 @@ const insertEps = async (req, res, next) => {
 };
 
 const insertNav = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets['nav']);
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["nav"]);
 
   for (data of xlData) {
     const insertData = [
       {
-        year: '2022',
-        q1: data['Q1-2022'],
-        q2: data['Q2-2022'],
-        q3: data['Q3-2022'],
-        q4: data['Q4-2022'],
+        year: "2022",
+        q1: data["Q1-2022"],
+        q2: data["Q2-2022"],
+        q3: data["Q3-2022"],
+        q4: data["Q4-2022"],
       },
       {
-        year: '2023',
-        q1: data['Q1-2023'],
-        q2: data['Q2-2023'],
-        q3: data['Q3-2023'],
+        year: "2023",
+        q1: data["Q1-2023"],
+        q2: data["Q2-2023"],
+        q3: data["Q3-2023"],
       },
     ];
     const response = await Fundamental.findOneAndUpdate(
@@ -80,7 +114,7 @@ const insertNav = async (req, res, next) => {
 };
 
 const insertNocfps = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets['npcfps']);
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["npcfps"]);
 
   for (data of xlData) {
     const insertData = [
@@ -92,11 +126,11 @@ const insertNocfps = async (req, res, next) => {
       //   q4: data['Q4-2022'],
       // },
       {
-        year: '2023',
-        q1: data['Q1-2023'],
-        q2: data['Q2-2023'],
-        q3: data['Q3-2023'],
-        q4: data['Q4-2023'],
+        year: "2023",
+        q1: data["Q1-2023"],
+        q2: data["Q2-2023"],
+        q3: data["Q3-2023"],
+        q4: data["Q4-2023"],
       },
     ];
     const response = await Fundamental.findOneAndUpdate(
@@ -110,23 +144,23 @@ const insertNocfps = async (req, res, next) => {
 
 const insertFinanceData = async (req, res, next) => {
   const workbook = xlsx.readFile(
-    'E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx'
+    "E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx"
   );
-  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets['fin']);
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["fin"]);
 
   const datamap = [
-    { text: 'Total Asset', value: 'totalAsset' },
-    { text: 'Total Current Asset', value: 'totalCurrentAsset' },
-    { text: "Shareholder's equity", value: 'shareholderEquity' },
+    { text: "Total Asset", value: "totalAsset" },
+    { text: "Total Current Asset", value: "totalCurrentAsset" },
+    { text: "Shareholder's equity", value: "shareholderEquity" },
     {
-      text: 'Total Non Current Liabilities',
-      value: 'totalNonCurrentLiabilities',
+      text: "Total Non Current Liabilities",
+      value: "totalNonCurrentLiabilities",
     },
-    { text: 'Total Current Liabilities', value: 'totalCurrentLiabilities' },
-    { text: 'Revenue', value: 'revenue' },
-    { text: 'Operating Profit/Loss', value: 'operatingProfit' },
-    { text: 'EBIT(Earn Before TAx)', value: 'ebit' },
-    { text: 'Net Income/Profit after tax', value: 'netIncome' },
+    { text: "Total Current Liabilities", value: "totalCurrentLiabilities" },
+    { text: "Revenue", value: "revenue" },
+    { text: "Operating Profit/Loss", value: "operatingProfit" },
+    { text: "EBIT(Earn Before TAx)", value: "ebit" },
+    { text: "Net Income/Profit after tax", value: "netIncome" },
   ];
 
   const perChunk = 9;
@@ -149,11 +183,12 @@ const insertFinanceData = async (req, res, next) => {
       values: {},
     };
 
-    let years = Object.keys(stock[0]).filter((item) => item.startsWith('20'));
+    let years = Object.keys(stock[0]).filter((item) => item.startsWith("20"));
 
     // console.log(stock[0].tradingCode)
 
     for (data of stock) {
+      // console.log(data.tradingCode);
       const param = datamap.find((item) => item.text === data.parameter).value;
 
       if (param) {
@@ -194,22 +229,22 @@ const insertFinanceData = async (req, res, next) => {
         year: year,
         value: Number(
           data.values.totalNonCurrentLiabilities[i].value +
-          data.values.totalCurrentLiabilities[i].value
+            data.values.totalCurrentLiabilities[i].value
         ),
       });
       bookValue.push({
         year: year,
         value: Number(
           data.values.totalAsset[i].value -
-          (data.values.totalNonCurrentLiabilities[i].value +
-            data.values.totalCurrentLiabilities[i].value)
+            (data.values.totalNonCurrentLiabilities[i].value +
+              data.values.totalCurrentLiabilities[i].value)
         ),
       });
       capitalEmployed.push({
         year: year,
         value: Number(
           data.values.totalAsset[i].value -
-          data.values.totalCurrentLiabilities[i].value
+            data.values.totalCurrentLiabilities[i].value
         ),
       });
       roa.push({
@@ -241,7 +276,7 @@ const insertFinanceData = async (req, res, next) => {
         year: year,
         value: Number(
           (
-            data.values.revenue[i].value / data.values.netIncome[i].value
+            data.values.netIncome[i].value / data.values.revenue[i].value
           ).toFixed(3)
         ),
       });
@@ -311,4 +346,5 @@ module.exports = {
   insertNocfps,
   insertFinanceData,
   insertFloorPrice,
+  changeSector,
 };
