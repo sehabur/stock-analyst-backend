@@ -1136,7 +1136,12 @@ const stockDetails = async (req, res, next) => {
         pe: {
           $round: [
             {
-              $divide: ["$ltp", "$epsCurrent"],
+              $divide: [
+                "$ltp",
+                {
+                  $cond: [{ $eq: ["$epsCurrent", 0] }, 0.000001, "$epsCurrent"],
+                },
+              ],
             },
             2,
           ],
@@ -1171,7 +1176,6 @@ const stockDetails = async (req, res, next) => {
             2,
           ],
         },
-
         _id: 0,
       },
     },

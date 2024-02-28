@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const fundamentalSchema = mongoose.Schema(
   {
@@ -18,6 +18,7 @@ const fundamentalSchema = mongoose.Schema(
     faceValue: { type: Number, required: true },
     epsCurrent: { type: Number, required: true },
     floorPrice: { type: Number, required: true },
+    epsCurrent: { type: Number, required: true },
 
     epsQuaterly: [{ type: Object, required: true }],
     navQuaterly: [{ type: Object, required: true }],
@@ -57,6 +58,6 @@ const fundamentalSchema = mongoose.Schema(
   }
 );
 
-const Fundamental = mongoose.model('Fundamental', fundamentalSchema);
+const Fundamental = mongoose.model("Fundamental", fundamentalSchema);
 
 module.exports = Fundamental;
