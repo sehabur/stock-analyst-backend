@@ -1309,7 +1309,7 @@ const stockDetails = async (req, res, next) => {
   @access:    public
 */
 const indexMinuteData = async (req, res, next) => {
-  const { minuteDataUpdateDate } = await Setting.findOne();
+  const { minuteDataUpdateDate, dataInsertionEnable } = await Setting.findOne();
 
   const index = await MinuteIndex.aggregate([
     {
@@ -1342,7 +1342,26 @@ const indexMinuteData = async (req, res, next) => {
       $unwind: "$latest",
     },
   ]);
-  res.status(200).json(index[0]);
+
+  const date = new Date(index[0].latest.time);
+  let hour = date.getHours();
+  let minute = date.getMinutes();
+
+  const nowdate = new Date();
+  let nowhour = nowdate.getHours();
+  let nowminute = nowdate.getMinutes();
+
+  let isMarketOpen = true;
+
+  if (dataInsertionEnable === 0) {
+    isMarketOpen = false;
+  } else {
+    if (nowhour > hour && nowminute > minute) {
+      isMarketOpen = false;
+    }
+  }
+
+  res.status(200).json({ ...index[0], isMarketOpen });
 };
 
 /*
@@ -1511,6 +1530,162 @@ const allGainerLoser = async (req, res, next) => {
               id: "$_id",
               _id: 0,
               tradingCode: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        gainerTrade: [
+          {
+            $match: {
+              trade: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              trade: -1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              trade: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        loserTrade: [
+          {
+            $match: {
+              trade: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              trade: 1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              trade: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        gainerValue: [
+          {
+            $match: {
+              value: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              value: -1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              value: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        loserValue: [
+          {
+            $match: {
+              value: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              value: 1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              value: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        gainerVolume: [
+          {
+            $match: {
+              volume: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              volume: -1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              volume: 1,
+              percentChange: 1,
+              ltp: 1,
+              category: "$fundamentals.category",
+              sector: "$fundamentals.sector",
+            },
+          },
+        ],
+        loserVolume: [
+          {
+            $match: {
+              volume: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              volume: 1,
+            },
+          },
+          {
+            $project: {
+              id: "$_id",
+              _id: 0,
+              tradingCode: 1,
+              volume: 1,
               percentChange: 1,
               ltp: 1,
               category: "$fundamentals.category",
@@ -2155,13 +2330,30 @@ const screener = async (req, res, next) => {
         volume: "$latest_prices.volume",
         pricePercentChange: "$latest_prices.percentChange",
         category: 1,
-        totalShares: 1,
+        totalShares: {
+          $round: [
+            {
+              $divide: ["$totalShares", 10000000],
+            },
+            2,
+          ],
+        },
         reserve: "$reserveSurplusWithoutOci",
         marketCap: {
-          $divide: ["$marketCap", 10],
+          $round: [
+            {
+              $divide: ["$marketCap", 10],
+            },
+            2,
+          ],
         },
         paidUpCap: {
-          $divide: ["$paidUpCap", 10],
+          $round: [
+            {
+              $divide: ["$paidUpCap", 10],
+            },
+            2,
+          ],
         },
         pe: {
           $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
@@ -2206,10 +2398,15 @@ const screener = async (req, res, next) => {
           "$screener.shareholding.percentChange.institute",
 
         freeFloatShare: {
-          $add: [
-            "$screener.shareholding.current.institute",
-            "$screener.shareholding.current.public",
-            "$screener.shareholding.current.foreign",
+          $round: [
+            {
+              $add: [
+                "$screener.shareholding.current.institute",
+                "$screener.shareholding.current.public",
+                "$screener.shareholding.current.foreign",
+              ],
+            },
+            2,
           ],
         },
       },

@@ -19,6 +19,7 @@ const fundamentalSchema = mongoose.Schema(
     epsCurrent: { type: Number, required: true },
     floorPrice: { type: Number, required: true },
     epsCurrent: { type: Number, required: true },
+    about: { type: String, required: true },
 
     epsQuaterly: [{ type: Object, required: true }],
     navQuaterly: [{ type: Object, required: true }],

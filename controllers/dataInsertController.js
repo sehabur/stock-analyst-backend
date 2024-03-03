@@ -84,6 +84,26 @@ const insertEps = async (req, res, next) => {
 
   res.send(xlData);
 };
+/*
+  @api:       GET /api/dataInsert/about/
+  @desc:      insert about section
+  @access:    public
+*/
+const insertAbout = async (req, res, next) => {
+  const workbook = xlsx.readFile(
+    "E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx"
+  );
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["about"]);
+
+  for (data of xlData) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.tradingCode },
+      { about: data.about }
+    );
+  }
+
+  res.send(xlData);
+};
 
 const insertNav = async (req, res, next) => {
   var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["nav"]);
@@ -347,4 +367,5 @@ module.exports = {
   insertFinanceData,
   insertFloorPrice,
   changeSector,
+  insertAbout,
 };
