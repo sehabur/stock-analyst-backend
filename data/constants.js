@@ -1,0 +1,7 @@
+const MARKET_CLOSE_HOUR = 14;
+const MARKET_CLOSE_MINUTE = 30;
+
+module.exports = {
+  MARKET_CLOSE_HOUR,
+  MARKET_CLOSE_MINUTE,
+};

@@ -1,6 +1,5 @@
 const url = require("url");
 const { DateTime } = require("luxon");
-const createError = require("http-errors");
 
 const MinutePrice = require("../models/minutePriceModel");
 const Fundamental = require("../models/fundamentalModel");
@@ -12,12 +11,11 @@ const BlockTr = require("../models/BlockTrModel");
 const MinuteIndex = require("../models/minuteIndexModel");
 const DailyIndex = require("../models/dailyIndexModel");
 const Setting = require("../models/settingModel");
-const {
-  sectorList,
-  stocksListDetails,
-  circuitMoveRange,
-} = require("../data/dse");
 const DayMinutePrice = require("../models/onedayMinutePriceModel");
+
+const { sectorList, circuitMoveRange } = require("../data/dse");
+
+const { getMarketOpenStatus } = require("../helper/price");
 
 /*
   @api:       GET /api/prices/getSymbolTvchart/
@@ -25,7 +23,10 @@ const DayMinutePrice = require("../models/onedayMinutePriceModel");
   @access:    public
 */
 const getSymbolTvchart = async (req, res) => {
-  const data = await Fundamental.find().select("tradingCode companyName");
+  const data = await Fundamental.find({ isActive: true }).select(
+    "tradingCode companyName"
+  );
+  console.log(data.length);
   res.status(200).json({
     Data: {
       DSE: {
@@ -173,14 +174,25 @@ const getBarsTvchart = async (req, res) => {
 };
 
 /*
+  @api:       GET /api/prices/getStocksList
+  @desc:      get all share tradingCode as an Array
+*/
+const getStocksList = async (req, res, next) => {
+  const allStocks = await Fundamental.find({ isActive: true }).select(
+    "tradingCode"
+  );
+  const stocks = allStocks.map((item) => item.tradingCode);
+  res.status(200).json(stocks);
+};
+
+/*
   @api:       GET /api/prices/getAllStocks
-  @desc:      get all share details
+  @desc:      get all share details as object
 */
 const getAllStocks = async (req, res, next) => {
-  const allStocks = await Fundamental.find().select(
+  const allStocks = await Fundamental.find({ isActive: true }).select(
     "tradingCode companyName sector category yearEnd"
   );
-
   res.status(200).json(allStocks);
 };
 
@@ -190,11 +202,32 @@ const getAllStocks = async (req, res, next) => {
   @access:    public
 */
 const latestPrice = async (req, res, next) => {
-  const latestPrice = await LatestPrice.aggregate([
+  const latestPrice = await DayMinutePrice.aggregate([
+    {
+      $sort: {
+        time: 1,
+      },
+    },
+    {
+      $group: {
+        _id: "$tradingCode",
+        open: { $first: "$ltp" },
+        high: { $last: "$high" },
+        low: { $last: "$low" },
+        close: { $last: "$ltp" },
+        ltp: { $last: "$ltp" },
+        ycp: { $first: "$ycp" },
+        change: { $last: "$change" },
+        percentChange: { $last: "$percentChange" },
+        trade: { $last: "$trade" },
+        volume: { $last: "$volume" },
+        value: { $last: "$value" },
+      },
+    },
     {
       $lookup: {
         from: "fundamentals",
-        localField: "tradingCode",
+        localField: "_id",
         foreignField: "tradingCode",
         as: "fundamentals",
       },
@@ -202,56 +235,14 @@ const latestPrice = async (req, res, next) => {
     { $unwind: "$fundamentals" },
     {
       $addFields: {
+        tradingCode: "$_id",
         sector: "$fundamentals.sector",
         category: "$fundamentals.category",
         companyName: "$fundamentals.companyName",
       },
     },
     {
-      $project: { fundamentals: 0 },
-    },
-    {
-      $sort: { tradingCode: 1 },
-    },
-  ]);
-  res.status(200).json(latestPrice);
-};
-
-/*
-  @api:       GET /api/prices/latestPricesBySearch?search={search}
-  @desc:      get latest share prices for all shares
-  @access:    public
-*/
-const latestPricesBySearch = async (req, res, next) => {
-  const { search } = url.parse(req.url, true).query;
-
-  const latestPrice = await LatestPrice.aggregate([
-    {
-      $lookup: {
-        from: "fundamentals",
-        localField: "tradingCode",
-        foreignField: "tradingCode",
-        as: "fundamentals",
-      },
-    },
-    { $unwind: "$fundamentals" },
-    {
-      $addFields: {
-        sector: "$fundamentals.sector",
-        category: "$fundamentals.category",
-        companyName: "$fundamentals.companyName",
-      },
-    },
-    {
-      $project: { fundamentals: 0 },
-    },
-    {
-      $match: {
-        $or: [
-          { tradingCode: { $regex: new RegExp(search, "i") } },
-          { companyName: { $regex: new RegExp(search, "i") } },
-        ],
-      },
+      $project: { fundamentals: 0, _id: 0 },
     },
     {
       $sort: { tradingCode: 1 },
@@ -424,22 +415,6 @@ const dailySectorPrice = async (req, res, next) => {
 
   const queryLimit = period ? Number(period) : 260; // default to 1 year //
 
-  // const today = DateTime.now().setZone('Asia/Dhaka');
-
-  // const queryDate = today
-  //   .set({
-  //     hour: 0,
-  //     minute: 0,
-  //     second: 0,
-  //     millisecond: 0,
-  //   })
-  //   .setZone('UTC', { keepLocalTime: true });
-
-  // const queryTime = queryDate.toUnixInteger();
-
-  // const lastDailySectorUpdateTime =
-  //   new Date(dailySectorUpdateDate).getTime() / 1000;
-
   const { dailySectorUpdateDate, minuteDataUpdateDate } =
     await Setting.findOne().select(
       "dailySectorUpdateDate minuteDataUpdateDate"
@@ -453,419 +428,400 @@ const dailySectorPrice = async (req, res, next) => {
     },
     {
       $lookup: {
-        from: "minute_prices",
+        from: "day_minute_prices",
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "minute_prices",
-        pipeline: [{ $match: { date: minuteDataUpdateDate } }],
-      },
-    },
-    { $unwind: "$minute_prices" },
-    {
-      $sort: {
-        "minute_prices.time": 1,
-      },
-    },
-    {
-      $project: {
-        date: "$minute_prices.date",
-        time: "$minute_prices.time",
-        tradingCode: "$minute_prices.tradingCode",
-        ltp: "$minute_prices.ltp",
-        high: "$minute_prices.high",
-        low: "$minute_prices.low",
-        close: "$minute_prices.close",
-        ycp: "$minute_prices.ycp",
-        change: "$minute_prices.change",
-        percentChange: "$minute_prices.percentChange",
-        trade: "$minute_prices.trade",
-        value: "$minute_prices.value",
-        volume: "$minute_prices.volume",
-        sector: 1,
+        // pipeline: [{ $match: { date: minuteDataUpdateDate } }],
       },
     },
   ]);
 
-  const dailySector = await DailySector.aggregate([
-    {
-      $facet: {
-        daily: [
-          {
-            $match: {
-              sector,
-            },
-          },
-          {
-            $sort: {
-              date: -1,
-            },
-          },
-          {
-            $limit: queryLimit,
-          },
-          {
-            $sort: {
-              date: 1,
-            },
-          },
-          {
-            $unionWith: {
-              coll: "latest_prices",
-              pipeline: [
-                {
-                  $match: {
-                    date: {
-                      $gt: dailySectorUpdateDate,
-                    },
-                  },
-                },
-                {
-                  $lookup: {
-                    from: "fundamentals",
-                    localField: "tradingCode",
-                    foreignField: "tradingCode",
-                    as: "fundamentals",
-                  },
-                },
-                { $unwind: "$fundamentals" },
-                {
-                  $match: {
-                    "fundamentals.sector": sector,
-                  },
-                },
-                {
-                  $group: {
-                    _id: null,
-                    date: { $first: "$date" },
-                    ltp: { $avg: "$ltp" },
-                    ycp: { $avg: "$ycp" },
-                    high: { $avg: "$high" },
-                    low: { $avg: "$low" },
-                    close: { $avg: "$ltp" },
-                    change: { $avg: "$change" },
-                    trade: { $sum: "$trade" },
-                    value: { $sum: "$value" },
-                    volume: { $sum: "$volume" },
-                  },
-                },
-                {
-                  $project: {
-                    _id: 0,
-                    date: 1,
-                    sector: sector,
-                    ltp: { $round: ["$ltp", 2] },
-                    ycp: { $round: ["$ycp", 2] },
-                    high: { $round: ["$high", 2] },
-                    low: { $round: ["$low", 2] },
-                    close: { $round: ["$close", 2] },
-                    change: { $round: ["$change", 2] },
-                    trade: 1,
-                    value: 1,
-                    volume: 1,
-                  },
-                },
-              ],
-            },
-          },
-        ],
-        weekly: [
-          {
-            $match: {
-              sector,
-            },
-          },
-          {
-            $sort: {
-              date: -1,
-            },
-          },
-          {
-            $limit: queryLimit,
-          },
-          {
-            $sort: {
-              date: 1,
-            },
-          },
-          {
-            $unionWith: {
-              coll: "latest_prices",
-              pipeline: [
-                {
-                  $match: {
-                    date: {
-                      $gt: dailySectorUpdateDate,
-                    },
-                  },
-                },
-                {
-                  $lookup: {
-                    from: "fundamentals",
-                    localField: "tradingCode",
-                    foreignField: "tradingCode",
-                    as: "fundamentals",
-                  },
-                },
-                { $unwind: "$fundamentals" },
-                {
-                  $match: {
-                    "fundamentals.sector": sector,
-                  },
-                },
-                {
-                  $group: {
-                    _id: null,
-                    date: { $first: "$date" },
-                    ltp: { $avg: "$ltp" },
-                    ycp: { $avg: "$ycp" },
-                    high: { $avg: "$high" },
-                    low: { $avg: "$low" },
-                    close: { $avg: "$ltp" },
-                    change: { $avg: "$change" },
-                    trade: { $sum: "$trade" },
-                    value: { $sum: "$value" },
-                    volume: { $sum: "$volume" },
-                  },
-                },
-                {
-                  $project: {
-                    _id: 0,
-                    date: 1,
-                    sector: sector,
-                    ltp: { $round: ["$ltp", 2] },
-                    ycp: { $round: ["$ycp", 2] },
-                    high: { $round: ["$high", 2] },
-                    low: { $round: ["$low", 2] },
-                    close: { $round: ["$close", 2] },
-                    change: { $round: ["$change", 2] },
-                    trade: 1,
-                    value: 1,
-                    volume: 1,
-                  },
-                },
-              ],
-            },
-          },
-          {
-            $addFields: {
-              startOfWeek: {
-                $toDate: {
-                  $subtract: [
-                    "$date",
-                    {
-                      $multiply: [
-                        {
-                          $subtract: [
-                            {
-                              $dayOfWeek: "$date",
-                            },
-                            1,
-                          ],
-                        },
-                        24 * 60 * 60 * 1000,
-                      ],
-                    },
-                  ],
-                },
-              },
-            },
-          },
-          {
-            $group: {
-              _id: "$startOfWeek",
-              open: { $first: "$ycp" },
-              high: { $max: "$high" },
-              low: { $min: "$low" },
-              close: { $last: "$close" },
-              trade: { $sum: "$trade" },
-              volume: { $sum: "$volume" },
-              value: { $sum: "$value" },
-            },
-          },
-          {
-            $addFields: {
-              date: "$_id",
-            },
-          },
-          {
-            $sort: {
-              _id: 1,
-            },
-          },
-        ],
-        monthly: [
-          {
-            $match: {
-              sector,
-            },
-          },
-          {
-            $sort: {
-              date: -1,
-            },
-          },
-          {
-            $limit: queryLimit,
-          },
-          {
-            $sort: {
-              date: 1,
-            },
-          },
-          {
-            $unionWith: {
-              coll: "latest_prices",
-              pipeline: [
-                {
-                  $match: {
-                    date: {
-                      $gt: dailySectorUpdateDate,
-                    },
-                  },
-                },
-                {
-                  $lookup: {
-                    from: "fundamentals",
-                    localField: "tradingCode",
-                    foreignField: "tradingCode",
-                    as: "fundamentals",
-                  },
-                },
-                { $unwind: "$fundamentals" },
-                {
-                  $match: {
-                    "fundamentals.sector": sector,
-                  },
-                },
-                {
-                  $group: {
-                    _id: null,
-                    date: { $first: "$date" },
-                    ltp: { $avg: "$ltp" },
-                    ycp: { $avg: "$ycp" },
-                    high: { $avg: "$high" },
-                    low: { $avg: "$low" },
-                    close: { $avg: "$ltp" },
-                    change: { $avg: "$change" },
-                    trade: { $sum: "$trade" },
-                    value: { $sum: "$value" },
-                    volume: { $sum: "$volume" },
-                  },
-                },
-                {
-                  $project: {
-                    _id: 0,
-                    date: 1,
-                    sector: sector,
-                    ltp: { $round: ["$ltp", 2] },
-                    ycp: { $round: ["$ycp", 2] },
-                    high: { $round: ["$high", 2] },
-                    low: { $round: ["$low", 2] },
-                    close: { $round: ["$close", 2] },
-                    change: { $round: ["$change", 2] },
-                    trade: 1,
-                    value: 1,
-                    volume: 1,
-                  },
-                },
-              ],
-            },
-          },
-          {
-            $addFields: {
-              startOfMonth: {
-                $dateFromParts: {
-                  year: {
-                    $year: { date: "$date", timezone: "Asia/Dhaka" },
-                  },
-                  month: {
-                    $month: { date: "$date", timezone: "Asia/Dhaka" },
-                  },
-                  day: 1,
-                },
-              },
-            },
-          },
-          {
-            $group: {
-              _id: "$startOfMonth",
-              open: { $first: "$ycp" },
-              high: { $max: "$high" },
-              low: { $min: "$low" },
-              close: { $last: "$close" },
-              trade: { $sum: "$trade" },
-              volume: { $sum: "$volume" },
-              value: { $sum: "$value" },
-            },
-          },
-          {
-            $addFields: {
-              date: "$_id",
-            },
-          },
-          {
-            $sort: {
-              _id: 1,
-            },
-          },
-        ],
-      },
-    },
-  ]);
+  // const minuteSector2 = await Fundamental.aggregate([
+  //   {
+  //     $match: {
+  //       sector: sector,
+  //     },
+  //   },
+  //   {
+  //     $lookup: {
+  //       from: "day_minute_prices",
+  //       localField: "tradingCode",
+  //       foreignField: "tradingCode",
+  //       as: "minute_prices",
+  //       // pipeline: [{ $match: { date: minuteDataUpdateDate } }],
+  //     },
+  //   },
+  //   { $unwind: "$minute_prices" },
+  //   {
+  //     $sort: {
+  //       "minute_prices.time": 1,
+  //     },
+  //   },
+  //   {
+  //     $group: {
+  //       _id: "$sector",
+  //       date: { $first: "$date" },
+  //       ltp: { $avg: "$ltp" },
+  //       ycp: { $avg: "$ycp" },
+  //       high: { $avg: "$high" },
+  //       low: { $avg: "$low" },
+  //       close: { $avg: "$ltp" },
+  //       change: { $avg: "$change" },
+  //       trade: { $sum: "$trade" },
+  //       value: { $sum: "$value" },
+  //       volume: { $sum: "$volume" },
+  //     },
+  //   },
+  //   // {
+  //   //   $project: {
+  //   //     date: "$minute_prices.date",
+  //   //     time: "$minute_prices.time",
+  //   //     tradingCode: "$minute_prices.tradingCode",
+  //   //     ltp: "$minute_prices.ltp",
+  //   //     high: "$minute_prices.high",
+  //   //     low: "$minute_prices.low",
+  //   //     close: "$minute_prices.close",
+  //   //     ycp: "$minute_prices.ycp",
+  //   //     change: "$minute_prices.change",
+  //   //     percentChange: "$minute_prices.percentChange",
+  //   //     trade: "$minute_prices.trade",
+  //   //     value: "$minute_prices.value",
+  //   //     volume: "$minute_prices.volume",
+  //   //     sector: 1,
+  //   //   },
+  //   // },
+  // ]);
 
-  // if (queryTime > lastDailySectorUpdateTime) {
-  //   const latestDaily = await LatestPrice.aggregate([
-  //     {
-  //       $lookup: {
-  //         from: 'fundamentals',
-  //         localField: 'tradingCode',
-  //         foreignField: 'tradingCode',
-  //         as: 'fundamentals',
-  //       },
+  // const dailySector = await DailySector.aggregate([
+  //   {
+  //     $facet: {
+  //       daily: [
+  //         {
+  //           $match: {
+  //             sector,
+  //           },
+  //         },
+  //         {
+  //           $sort: {
+  //             date: -1,
+  //           },
+  //         },
+  //         {
+  //           $limit: queryLimit,
+  //         },
+  //         {
+  //           $sort: {
+  //             date: 1,
+  //           },
+  //         },
+  //         {
+  //           $unionWith: {
+  //             coll: "latest_prices",
+  //             pipeline: [
+  //               {
+  //                 $match: {
+  //                   date: {
+  //                     $gt: dailySectorUpdateDate,
+  //                   },
+  //                 },
+  //               },
+  //               {
+  //                 $lookup: {
+  //                   from: "fundamentals",
+  //                   localField: "tradingCode",
+  //                   foreignField: "tradingCode",
+  //                   as: "fundamentals",
+  //                 },
+  //               },
+  //               { $unwind: "$fundamentals" },
+  //               {
+  //                 $match: {
+  //                   "fundamentals.sector": sector,
+  //                 },
+  //               },
+  //               {
+  //                 $group: {
+  //                   _id: null,
+  //                   date: { $first: "$date" },
+  //                   ltp: { $avg: "$ltp" },
+  //                   ycp: { $avg: "$ycp" },
+  //                   high: { $avg: "$high" },
+  //                   low: { $avg: "$low" },
+  //                   close: { $avg: "$ltp" },
+  //                   change: { $avg: "$change" },
+  //                   trade: { $sum: "$trade" },
+  //                   value: { $sum: "$value" },
+  //                   volume: { $sum: "$volume" },
+  //                 },
+  //               },
+  //               {
+  //                 $project: {
+  //                   _id: 0,
+  //                   date: 1,
+  //                   sector: sector,
+  //                   ltp: { $round: ["$ltp", 2] },
+  //                   ycp: { $round: ["$ycp", 2] },
+  //                   high: { $round: ["$high", 2] },
+  //                   low: { $round: ["$low", 2] },
+  //                   close: { $round: ["$close", 2] },
+  //                   change: { $round: ["$change", 2] },
+  //                   trade: 1,
+  //                   value: 1,
+  //                   volume: 1,
+  //                 },
+  //               },
+  //             ],
+  //           },
+  //         },
+  //       ],
+  //       weekly: [
+  //         {
+  //           $match: {
+  //             sector,
+  //           },
+  //         },
+  //         {
+  //           $sort: {
+  //             date: -1,
+  //           },
+  //         },
+  //         {
+  //           $limit: queryLimit,
+  //         },
+  //         {
+  //           $sort: {
+  //             date: 1,
+  //           },
+  //         },
+  //         {
+  //           $unionWith: {
+  //             coll: "latest_prices",
+  //             pipeline: [
+  //               {
+  //                 $match: {
+  //                   date: {
+  //                     $gt: dailySectorUpdateDate,
+  //                   },
+  //                 },
+  //               },
+  //               {
+  //                 $lookup: {
+  //                   from: "fundamentals",
+  //                   localField: "tradingCode",
+  //                   foreignField: "tradingCode",
+  //                   as: "fundamentals",
+  //                 },
+  //               },
+  //               { $unwind: "$fundamentals" },
+  //               {
+  //                 $match: {
+  //                   "fundamentals.sector": sector,
+  //                 },
+  //               },
+  //               {
+  //                 $group: {
+  //                   _id: null,
+  //                   date: { $first: "$date" },
+  //                   ltp: { $avg: "$ltp" },
+  //                   ycp: { $avg: "$ycp" },
+  //                   high: { $avg: "$high" },
+  //                   low: { $avg: "$low" },
+  //                   close: { $avg: "$ltp" },
+  //                   change: { $avg: "$change" },
+  //                   trade: { $sum: "$trade" },
+  //                   value: { $sum: "$value" },
+  //                   volume: { $sum: "$volume" },
+  //                 },
+  //               },
+  //               {
+  //                 $project: {
+  //                   _id: 0,
+  //                   date: 1,
+  //                   sector: sector,
+  //                   ltp: { $round: ["$ltp", 2] },
+  //                   ycp: { $round: ["$ycp", 2] },
+  //                   high: { $round: ["$high", 2] },
+  //                   low: { $round: ["$low", 2] },
+  //                   close: { $round: ["$close", 2] },
+  //                   change: { $round: ["$change", 2] },
+  //                   trade: 1,
+  //                   value: 1,
+  //                   volume: 1,
+  //                 },
+  //               },
+  //             ],
+  //           },
+  //         },
+  //         {
+  //           $addFields: {
+  //             startOfWeek: {
+  //               $toDate: {
+  //                 $subtract: [
+  //                   "$date",
+  //                   {
+  //                     $multiply: [
+  //                       {
+  //                         $subtract: [
+  //                           {
+  //                             $dayOfWeek: "$date",
+  //                           },
+  //                           1,
+  //                         ],
+  //                       },
+  //                       24 * 60 * 60 * 1000,
+  //                     ],
+  //                   },
+  //                 ],
+  //               },
+  //             },
+  //           },
+  //         },
+  //         {
+  //           $group: {
+  //             _id: "$startOfWeek",
+  //             open: { $first: "$ycp" },
+  //             high: { $max: "$high" },
+  //             low: { $min: "$low" },
+  //             close: { $last: "$close" },
+  //             trade: { $sum: "$trade" },
+  //             volume: { $sum: "$volume" },
+  //             value: { $sum: "$value" },
+  //           },
+  //         },
+  //         {
+  //           $addFields: {
+  //             date: "$_id",
+  //           },
+  //         },
+  //         {
+  //           $sort: {
+  //             _id: 1,
+  //           },
+  //         },
+  //       ],
+  //       monthly: [
+  //         {
+  //           $match: {
+  //             sector,
+  //           },
+  //         },
+  //         {
+  //           $sort: {
+  //             date: -1,
+  //           },
+  //         },
+  //         {
+  //           $limit: queryLimit,
+  //         },
+  //         {
+  //           $sort: {
+  //             date: 1,
+  //           },
+  //         },
+  //         {
+  //           $unionWith: {
+  //             coll: "latest_prices",
+  //             pipeline: [
+  //               {
+  //                 $match: {
+  //                   date: {
+  //                     $gt: dailySectorUpdateDate,
+  //                   },
+  //                 },
+  //               },
+  //               {
+  //                 $lookup: {
+  //                   from: "fundamentals",
+  //                   localField: "tradingCode",
+  //                   foreignField: "tradingCode",
+  //                   as: "fundamentals",
+  //                 },
+  //               },
+  //               { $unwind: "$fundamentals" },
+  //               {
+  //                 $match: {
+  //                   "fundamentals.sector": sector,
+  //                 },
+  //               },
+  //               {
+  //                 $group: {
+  //                   _id: null,
+  //                   date: { $first: "$date" },
+  //                   ltp: { $avg: "$ltp" },
+  //                   ycp: { $avg: "$ycp" },
+  //                   high: { $avg: "$high" },
+  //                   low: { $avg: "$low" },
+  //                   close: { $avg: "$ltp" },
+  //                   change: { $avg: "$change" },
+  //                   trade: { $sum: "$trade" },
+  //                   value: { $sum: "$value" },
+  //                   volume: { $sum: "$volume" },
+  //                 },
+  //               },
+  //               {
+  //                 $project: {
+  //                   _id: 0,
+  //                   date: 1,
+  //                   sector: sector,
+  //                   ltp: { $round: ["$ltp", 2] },
+  //                   ycp: { $round: ["$ycp", 2] },
+  //                   high: { $round: ["$high", 2] },
+  //                   low: { $round: ["$low", 2] },
+  //                   close: { $round: ["$close", 2] },
+  //                   change: { $round: ["$change", 2] },
+  //                   trade: 1,
+  //                   value: 1,
+  //                   volume: 1,
+  //                 },
+  //               },
+  //             ],
+  //           },
+  //         },
+  //         {
+  //           $addFields: {
+  //             startOfMonth: {
+  //               $dateFromParts: {
+  //                 year: {
+  //                   $year: { date: "$date", timezone: "Asia/Dhaka" },
+  //                 },
+  //                 month: {
+  //                   $month: { date: "$date", timezone: "Asia/Dhaka" },
+  //                 },
+  //                 day: 1,
+  //               },
+  //             },
+  //           },
+  //         },
+  //         {
+  //           $group: {
+  //             _id: "$startOfMonth",
+  //             open: { $first: "$ycp" },
+  //             high: { $max: "$high" },
+  //             low: { $min: "$low" },
+  //             close: { $last: "$close" },
+  //             trade: { $sum: "$trade" },
+  //             volume: { $sum: "$volume" },
+  //             value: { $sum: "$value" },
+  //           },
+  //         },
+  //         {
+  //           $addFields: {
+  //             date: "$_id",
+  //           },
+  //         },
+  //         {
+  //           $sort: {
+  //             _id: 1,
+  //           },
+  //         },
+  //       ],
   //     },
-  //     { $unwind: '$fundamentals' },
-  //     {
-  //       $match: {
-  //         'fundamentals.sector': sector,
-  //       },
-  //     },
-  //     {
-  //       $group: {
-  //         _id: null,
-  //         date: { $first: '$date' },
-  //         ltp: { $avg: '$ltp' },
-  //         ycp: { $avg: '$ycp' },
-  //         high: { $avg: '$high' },
-  //         low: { $avg: '$low' },
-  //         close: { $avg: '$ltp' },
-  //         change: { $avg: '$change' },
-  //         trade: { $sum: '$trade' },
-  //         volume: { $sum: '$volume' },
-  //         value: { $sum: '$value' },
-  //       },
-  //     },
-  //     {
-  //       $project: {
-  //         _id: 0,
-  //         date: 1,
-  //         sector: sector,
-  //         ltp: { $round: ['$ltp', 2] },
-  //         ycp: { $round: ['$ycp', 2] },
-  //         high: { $round: ['$high', 2] },
-  //         low: { $round: ['$low', 2] },
-  //         close: { $round: ['$close', 2] },
-  //         change: { $round: ['$change', 2] },
-  //         trade: 1,
-  //         value: 1,
-  //         volume: 1,
-  //       },
-  //     },
-  //   ]);
+  //   },
+  // ]);
 
-  //   dailySector[0].daily.push(latestDaily[0]);
-  // }
-
-  res.status(200).json({ minute: minuteSector, ...dailySector[0] });
+  res.status(200).json({ minute: minuteSector });
+  // res.status(200).json({ minute: minuteSector, ...dailySector[0] });
 };
 
 /*
@@ -880,10 +836,6 @@ const stockDetails = async (req, res, next) => {
   const { period } = url.parse(req.url, true).query;
 
   const queryLimit = period ? Number(period) : 260; // default to 1 year //
-
-  const sector = stocksListDetails.find(
-    (stock) => stock.tradingCode === tradingCode
-  ).sector;
 
   const { dailyPriceUpdateDate, minuteDataUpdateDate } =
     await Setting.findOne().select("dailyPriceUpdateDate minuteDataUpdateDate");
@@ -918,6 +870,9 @@ const stockDetails = async (req, res, next) => {
               close: 1,
               ltp: 1,
               ycp: 1,
+              value: 1,
+              volume: 1,
+              trade: 1,
             },
           },
         ],
@@ -947,9 +902,24 @@ const stockDetails = async (req, res, next) => {
         date: 1,
       },
     },
+    // {
+    //   $unionWith: {
+    //     coll: "latest_prices",
+    //     pipeline: [
+    //       {
+    //         $match: {
+    //           tradingCode: tradingCode,
+    //           date: {
+    //             $gt: dailyPriceUpdateDate,
+    //           },
+    //         },
+    //       },
+    //     ],
+    //   },
+    // },
     {
       $unionWith: {
-        coll: "latest_prices",
+        coll: "day_minute_prices",
         pipeline: [
           {
             $match: {
@@ -958,6 +928,31 @@ const stockDetails = async (req, res, next) => {
                 $gt: dailyPriceUpdateDate,
               },
             },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              open: { $first: "$ltp" },
+              high: { $max: "$high" },
+              low: { $min: "$low" },
+              close: { $last: "$ltp" },
+              // ltp: { $last: "$ltp" },
+              // ycp: { $first: "$ycp" },
+              // change: { $last: "$change" },
+              // percentChange: { $last: "$percentChange" },
+              // trade: { $last: "$trade" },
+              // value: { $last: "$value" },
+              volume: { $last: "$volume" },
+            },
+          },
+          {
+            $project: { _id: 0 },
           },
         ],
       },
@@ -1088,6 +1083,8 @@ const stockDetails = async (req, res, next) => {
   ]);
 
   const fundamentalsBasic = await Fundamental.findOne({ tradingCode });
+
+  const sector = fundamentalsBasic.sector;
 
   const latestPrice = minutePrice[0].latest;
 
@@ -1226,7 +1223,7 @@ const stockDetails = async (req, res, next) => {
       ...zeroValues,
       ...negativeValues.sort((a, b) => b.value - a.value),
     ];
-    // console.log(sectorData);
+
     const position =
       sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
 
@@ -1292,11 +1289,15 @@ const stockDetails = async (req, res, next) => {
       : null,
   };
 
+  const isMarketOpen = await getMarketOpenStatus();
+
   res.status(200).json({
     ...minutePrice[0],
     ...dailyPrice[0],
     fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
+    isMarketOpen,
   });
+
   // } catch (error) {
   //   const err = createError(500, "Error Occured");
   //   next(err);
@@ -1343,23 +1344,7 @@ const indexMinuteData = async (req, res, next) => {
     },
   ]);
 
-  const date = new Date(index[0].latest.time);
-  let hour = date.getHours();
-  let minute = date.getMinutes();
-
-  const nowdate = new Date();
-  let nowhour = nowdate.getHours();
-  let nowminute = nowdate.getMinutes();
-
-  let isMarketOpen = true;
-
-  if (dataInsertionEnable === 0) {
-    isMarketOpen = false;
-  } else {
-    if (nowhour > hour && nowminute > minute) {
-      isMarketOpen = false;
-    }
-  }
+  const isMarketOpen = await getMarketOpenStatus();
 
   res.status(200).json({ ...index[0], isMarketOpen });
 };
@@ -1455,6 +1440,13 @@ const blocktrByStock = async (req, res, next) => {
 
   if (tradingCode === "all") {
     blocktr = await BlockTr.find().sort({ date: -1 }).limit(queryLimit);
+  } else if (tradingCode === "lastday") {
+    const { dailyBlockTrUpdateDate } = await Setting.findOne().select(
+      "dailyBlockTrUpdateDate"
+    );
+    blocktr = await BlockTr.find({ date: dailyBlockTrUpdateDate })
+      .sort({ value: -1 })
+      .limit(queryLimit);
   } else {
     blocktr = await BlockTr.find({ tradingCode })
       .sort({ date: -1 })
@@ -1531,9 +1523,11 @@ const allGainerLoser = async (req, res, next) => {
               _id: 0,
               tradingCode: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1557,9 +1551,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               trade: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1583,9 +1579,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               trade: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1609,9 +1607,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               value: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1635,9 +1635,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               value: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1661,9 +1663,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               volume: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1687,9 +1691,11 @@ const allGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               volume: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -1713,9 +1719,11 @@ const allGainerLoser = async (req, res, next) => {
               _id: 0,
               tradingCode: 1,
               percentChange: 1,
+              change: 1,
               ltp: 1,
               category: "$fundamentals.category",
               sector: "$fundamentals.sector",
+              companyName: "$fundamentals.companyName",
             },
           },
         ],
@@ -2297,6 +2305,11 @@ const screener = async (req, res, next) => {
 
   const data = await Fundamental.aggregate([
     {
+      $match: {
+        isActive: true,
+      },
+    },
+    {
       $lookup: {
         from: "latest_prices",
         localField: "tradingCode",
@@ -2423,7 +2436,345 @@ const screener = async (req, res, next) => {
     },
   ]);
 
-  res.json(data);
+  res.status(200).json(data);
+};
+
+/*
+  @api:       GET /api/prices/topFinancials?setlimit={linit}
+  @desc:      get gainer and losers data
+  @access:    public
+*/
+const topFinancials = async (req, res, next) => {
+  const { setlimit } = url.parse(req.url, true).query;
+
+  const limit = setlimit ? Number(setlimit) : 8;
+
+  const data = await Fundamental.aggregate([
+    {
+      $match: {
+        isActive: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "latest_prices",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "latest_prices",
+      },
+    },
+    {
+      $unwind: "$latest_prices",
+    },
+    {
+      $addFields: {
+        ltp: {
+          $cond: [
+            { $gt: ["$latest_prices.ltp", 0] },
+            "$latest_prices.ltp",
+            "$latest_prices.ycp",
+          ],
+        },
+        epsCurrent: {
+          $cond: [{ $eq: ["$epsCurrent", 0] }, 0.000001, "$epsCurrent"],
+        },
+      },
+    },
+    {
+      $project: {
+        id: "$_id",
+        tradingCode: 1,
+        ltp: 1,
+        epsCurrent: 1,
+        percentChange: "$latest_prices.percentChange",
+        marketCap: {
+          $round: [
+            {
+              $divide: ["$marketCap", 10],
+            },
+            2,
+          ],
+        },
+        pe: {
+          $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
+        },
+        reserveSurplus: "$screener.reserveSurplus.value",
+        roe: "$screener.roe.value",
+        roa: "$screener.roa.value",
+        currentRatio: "$screener.currentRatio.value",
+        cashDividend: "$screener.dividend.cash",
+        revenue: {
+          $round: [
+            {
+              $divide: ["$screener.revenue.value", 10000000],
+            },
+            2,
+          ],
+        },
+        navYearly: "$screener.navYearly.value",
+        netIncomeRatio: "$screener.netIncomeRatio.value",
+      },
+    },
+    {
+      $facet: {
+        pe: [
+          {
+            $match: {
+              pe: {
+                $gt: 0,
+              },
+            },
+          },
+          {
+            $sort: {
+              pe: 1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$pe",
+            },
+          },
+        ],
+        eps: [
+          {
+            $sort: {
+              epsCurrent: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$epsCurrent",
+            },
+          },
+        ],
+        marketCap: [
+          {
+            $sort: {
+              marketCap: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              marketCap: 1,
+              value: "$epsCurrent",
+            },
+          },
+        ],
+        reserve: [
+          {
+            $sort: {
+              reserveSurplus: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              reserveSurplus: 1,
+              value: "$epsCurrent",
+            },
+          },
+        ],
+        roe: [
+          {
+            $sort: {
+              roe: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$roe",
+            },
+          },
+        ],
+        roa: [
+          {
+            $sort: {
+              roa: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$roa",
+            },
+          },
+        ],
+        currentRatio: [
+          {
+            $sort: {
+              currentRatio: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$currentRatio",
+            },
+          },
+        ],
+        dividend: [
+          {
+            $sort: {
+              cashDividend: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$cashDividend",
+            },
+          },
+        ],
+        revenue: [
+          {
+            $sort: {
+              revenue: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$revenue",
+            },
+          },
+        ],
+        nav: [
+          {
+            $sort: {
+              navYearly: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$navYearly",
+            },
+          },
+        ],
+        netIncomeRatio: [
+          {
+            $sort: {
+              netIncomeRatio: -1,
+            },
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $project: {
+              tradingCode: 1,
+              ltp: 1,
+              percentChange: 1,
+              value: "$netIncomeRatio",
+            },
+          },
+        ],
+      },
+    },
+  ]);
+  res.status(200).json(data[0]);
+};
+
+/*
+  Not in use
+*/
+
+/*
+  @api:       GET /api/prices/latestPricesBySearch?search={search}
+  @desc:      get latest share prices for all shares
+  @access:    public
+*/
+const latestPricesBySearch = async (req, res, next) => {
+  const { search } = url.parse(req.url, true).query;
+
+  const latestPrice = await LatestPrice.aggregate([
+    {
+      $lookup: {
+        from: "fundamentals",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "fundamentals",
+      },
+    },
+    { $unwind: "$fundamentals" },
+    {
+      $addFields: {
+        sector: "$fundamentals.sector",
+        category: "$fundamentals.category",
+        companyName: "$fundamentals.companyName",
+      },
+    },
+    {
+      $project: { fundamentals: 0 },
+    },
+    {
+      $match: {
+        $or: [
+          { tradingCode: { $regex: new RegExp(search, "i") } },
+          { companyName: { $regex: new RegExp(search, "i") } },
+        ],
+      },
+    },
+    {
+      $sort: { tradingCode: 1 },
+    },
+  ]);
+  res.status(200).json(latestPrice);
 };
 
 /*
@@ -2557,6 +2908,7 @@ module.exports = {
   getSymbolTvchart,
   getBarsTvchart,
   getAllStocks,
+  getStocksList,
   latestPrice,
   latestPricesBySearch,
   sectorWiseLatestPrice,
@@ -2567,6 +2919,7 @@ module.exports = {
   blocktrByStock,
   allGainerLoser,
   screener,
+  topFinancials,
   pytest,
   newtest,
 };

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const settingSchema = mongoose.Schema(
   {
@@ -22,8 +22,12 @@ const settingSchema = mongoose.Schema(
       type: Date,
       required: true,
     },
-    previousDayDate: {
+    dailyBlockTrUpdateDate: {
       type: Date,
+      required: true,
+    },
+    lastVolume: {
+      type: Number,
       required: true,
     },
   },
@@ -32,6 +36,6 @@ const settingSchema = mongoose.Schema(
   }
 );
 
-const Setting = mongoose.model('Setting', settingSchema);
+const Setting = mongoose.model("Setting", settingSchema);
 
 module.exports = Setting;

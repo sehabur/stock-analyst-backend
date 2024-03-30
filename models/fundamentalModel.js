@@ -7,6 +7,7 @@ const fundamentalSchema = mongoose.Schema(
     marketLot: { type: Number, required: true },
     totalShares: { type: Number, required: true },
     sector: { type: String, required: true },
+    lastAgm: { type: String, required: true },
     rightIssue: { type: String, required: true },
     yearEnd: { type: String, required: true },
     reserveSurplusWithoutOci: { type: Number, required: true },
@@ -20,6 +21,9 @@ const fundamentalSchema = mongoose.Schema(
     floorPrice: { type: Number, required: true },
     epsCurrent: { type: Number, required: true },
     about: { type: String, required: true },
+
+    declarationDate: { type: Date },
+    recordDate: { type: Date },
 
     epsQuaterly: [{ type: Object, required: true }],
     navQuaterly: [{ type: Object, required: true }],
@@ -53,6 +57,8 @@ const fundamentalSchema = mongoose.Schema(
     profitMargin: [{ type: Object, required: true }],
 
     screener: { type: Object },
+
+    isActive: { type: Boolean },
   },
   {
     timestamps: true,

@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const {
   getAllStocks,
+  getStocksList,
   latestPrice,
   latestPricesBySearch,
   sectorWiseLatestPrice,
@@ -12,6 +13,7 @@ const {
   newsByStock,
   blocktrByStock,
   screener,
+  topFinancials,
   pytest,
   getSymbolTvchart,
   getBarsTvchart,
@@ -21,6 +23,8 @@ const {
 const router = express.Router();
 
 router.route("/latestPrice").get(latestPrice);
+
+router.route("/getStocksList").get(getStocksList);
 
 router.route("/getAllStocks").get(getAllStocks);
 
@@ -41,6 +45,8 @@ router.route("/allGainerLoser").get(allGainerLoser);
 router.route("/indexMinuteData").get(indexMinuteData);
 
 router.route("/screener").post(screener);
+
+router.route("/topFinancials").get(topFinancials);
 
 router.route("/pytest").get(pytest);
 
