@@ -1,4 +1,4 @@
-const MARKET_CLOSE_HOUR = 14;
+const MARKET_CLOSE_HOUR = 13;
 const MARKET_CLOSE_MINUTE = 30;
 
 module.exports = {

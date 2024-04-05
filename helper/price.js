@@ -13,11 +13,21 @@ const getMarketOpenStatus = async () => {
 
   let isMarketOpen = true;
 
+  // console.log(nowhour, nowminute, MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE);
+
   if (dataInsertionEnable === 0) {
     isMarketOpen = false;
   } else {
-    if (nowhour > MARKET_CLOSE_HOUR && nowminute > MARKET_CLOSE_MINUTE) {
+    if (nowhour > MARKET_CLOSE_HOUR) {
       isMarketOpen = false;
+    } else if (nowhour == MARKET_CLOSE_HOUR) {
+      if (nowminute > MARKET_CLOSE_MINUTE) {
+        isMarketOpen = false;
+      } else {
+        isMarketOpen = true;
+      }
+    } else {
+      isMarketOpen = true;
     }
   }
   return isMarketOpen;
