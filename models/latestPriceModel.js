@@ -1,9 +1,13 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const latestPriceSchema = mongoose.Schema(
   {
     time: {
       type: Date,
+      required: true,
+    },
+    ltp: {
+      type: Number,
       required: true,
     },
     tradingCode: {
@@ -16,6 +20,6 @@ const latestPriceSchema = mongoose.Schema(
   }
 );
 
-const LatestPrice = mongoose.model('Latest_price', latestPriceSchema);
+const LatestPrice = mongoose.model("Latest_price", latestPriceSchema);
 
 module.exports = LatestPrice;
