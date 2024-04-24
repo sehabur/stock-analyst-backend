@@ -356,7 +356,7 @@ const deletePortfolio = async (req, res, next) => {
 
 /*
   @api:       PATCH /api/users/trade/buy
-  @desc:      buy trade
+  @desc:      buy request
   @access:    private
 */
 const createBuyRequest = async (req, res, next) => {
