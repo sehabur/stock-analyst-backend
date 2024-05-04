@@ -31,7 +31,7 @@ const signin = async (req, res, next) => {
   result = await bcrypt.compare(password, user.password);
 
   if (!result) {
-    const error = createError(401, "Password does not match.");
+    const error = createError(401, "Password incorrect");
     return next(error);
   }
 
@@ -67,6 +67,7 @@ const signin = async (req, res, next) => {
 const signup = async (req, res, next) => {
   try {
     const errors = validationResult(req);
+
     if (!errors.isEmpty()) {
       return res.status(400).json(errors);
     }
@@ -78,7 +79,7 @@ const signup = async (req, res, next) => {
     if (userExists) {
       const error = createError(
         400,
-        "Account already exists with this phone number"
+        "Account already exists with this phone number. Please try with different number"
       );
       return next(error);
     }
@@ -88,6 +89,8 @@ const signup = async (req, res, next) => {
       phone: phone.trim(),
       email: email.trim(),
       password: encriptPassword(password),
+      isActive: true,
+      isVerified: true, // For now //
     });
 
     res.status(201).json({
@@ -95,7 +98,7 @@ const signup = async (req, res, next) => {
       user: newUser,
     });
   } catch (err) {
-    const error = createError(500, "Error occured");
+    const error = createError(500, "Something went wrong. Please try again");
     next(error);
   }
 };

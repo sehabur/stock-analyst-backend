@@ -3,6 +3,7 @@ const axios = require("axios");
 const {
   getAllStocks,
   getStocksList,
+  getIpoList,
   latestPrice,
   latestPricesBySearch,
   sectorWiseLatestPrice,
@@ -27,6 +28,8 @@ router.route("/latestPrice").get(latestPrice);
 router.route("/getStocksList").get(getStocksList);
 
 router.route("/getAllStocks").get(getAllStocks);
+
+router.route("/ipo").get(getIpoList);
 
 router.route("/latestPricesBySearch").get(latestPricesBySearch);
 
