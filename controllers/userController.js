@@ -15,27 +15,32 @@ const LatestPrice = require("../models/latestPriceModel");
   @access:    public
 */
 const signin = async (req, res, next) => {
-  try {
-    const { phone: phoneNumber, password } = req.body;
-    const user = await User.findOne({ phone: phoneNumber, isActive: true });
+  // try {
+  const { phone: phoneNumber, password } = req.body;
+  const user = await User.findOne({ phone: phoneNumber, isActive: true });
 
-    if (!user) {
-      const error = createError(404, "User not found");
-      return next(error);
-    }
-    if (!user.isVerified) {
-      const error = createError(401, "User verification pending");
-      return next(error);
-    }
+  if (!user) {
+    const error = createError(404, "User not found");
+    return next(error);
+  }
+  if (!user.isVerified) {
+    const error = createError(401, "User verification pending");
+    return next(error);
+  }
 
-    result = await bcrypt.compare(password, user.password);
+  result = await bcrypt.compare(password, user.password);
 
-    if (!result) {
-      const error = createError(401, "Password incorrect");
-      return next(error);
-    }
+  if (!result) {
+    const error = createError(401, "Password incorrect");
+    return next(error);
+  }
 
-    const {
+  const { _id, name, email, phone, portfolio, favorites, isActive, createdAt } =
+    user;
+
+  res.status(200).json({
+    message: "Login attempt successful",
+    user: {
       _id,
       name,
       email,
@@ -44,27 +49,14 @@ const signin = async (req, res, next) => {
       favorites,
       isActive,
       createdAt,
-    } = user;
-
-    res.status(200).json({
-      message: "Login attempt successful",
-      user: {
-        _id,
-        name,
-        email,
-        phone,
-        portfolio,
-        favorites,
-        isActive,
-        createdAt,
-        token: generateToken(_id),
-        isLoggedIn: true,
-      },
-    });
-  } catch (err) {
-    const error = createError(500, "Login failed. Unknown Error");
-    next(error);
-  }
+      token: generateToken(_id),
+      isLoggedIn: true,
+    },
+  });
+  // } catch (err) {
+  //   const error = createError(500, "Login failed. Unknown Error");
+  //   next(error);
+  // }
 };
 
 /*
