@@ -59,87 +59,17 @@ const getBarsTvchart = async (req, res) => {
   const { exchange, symbol, resolutionType, fromTime, toTime, limit } =
     url.parse(req.url, true).query;
 
-  try {
-    if (["DSEX", "DSES", "DSE30"].includes(symbol)) {
-      let index;
-      if (resolutionType === "intraday") {
-        index = await MinuteIndex.aggregate([
-          {
-            $match: {
-              time: {
-                $gte: new Date(fromTime * 1000),
-              },
-            },
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $project: {
-              time: { $toLong: "$time" },
-              ycp: "$dsex.index",
-              close: "$dsex.index",
-              high: "$dsex.index",
-              low: "$dsex.index",
-              volume: "$totalVolume",
-            },
-          },
-        ]);
-      } else {
-        index = await DailyIndex.aggregate([
-          {
-            $match: {
-              date: {
-                $gte: new Date(fromTime * 1000),
-                $lte: new Date(toTime * 1000),
-              },
-            },
-          },
-          {
-            $sort: {
-              date: 1,
-            },
-          },
-          {
-            $project: {
-              date: { $toLong: "$date" },
-              ycp: "$dsex.index",
-              close: "$dsex.index",
-              high: "$dsex.index",
-              low: "$dsex.index",
-              volume: "$totalVolume",
-            },
-          },
-        ]);
-      }
-      let indexdata = {
-        Response: "Success",
-        Data: index,
-      };
-      return res.status(200).json(indexdata);
-    }
-
-    let latestPrice = [];
-
+  // try {
+  if (["DSEX", "DSES", "DSE30"].includes(symbol)) {
+    let index;
     if (resolutionType === "intraday") {
-      const prices = await MinutePrice.aggregate([
+      index = await MinuteIndex.aggregate([
         {
           $match: {
-            tradingCode: symbol,
             time: {
-              $lte: new Date(toTime * 1000),
+              $gte: new Date(fromTime * 1000),
             },
           },
-        },
-        {
-          $sort: {
-            time: -1,
-          },
-        },
-        {
-          $limit: Number(limit),
         },
         {
           $sort: {
@@ -149,40 +79,18 @@ const getBarsTvchart = async (req, res) => {
         {
           $project: {
             time: { $toLong: "$time" },
-            open: 1,
-            close: 1,
-            high: 1,
-            low: 1,
-            ltp: 1,
-            ycp: 1,
-            volume: 1,
+            ycp: "$dsex.index",
+            close: "$dsex.index",
+            high: "$dsex.index",
+            low: "$dsex.index",
+            volume: "$totalVolume",
           },
         },
       ]);
-
-      let volume;
-      for (let i = 1; i < prices.length; i++) {
-        const currentTime = new Date(prices[i].time);
-        const prevTime = new Date(prices[i - 1].time);
-
-        let currentday = currentTime.getDate();
-        let prevday = prevTime.getDate();
-
-        if (currentday == prevday) {
-          volume = prices[i].volume - prices[i - 1].volume;
-        } else {
-          volume = prices[i].volume;
-        }
-        latestPrice.push({
-          ...prices[i],
-          volume: volume,
-        });
-      }
     } else {
-      const prices = await DailyPrice.aggregate([
+      index = await DailyIndex.aggregate([
         {
           $match: {
-            tradingCode: symbol,
             date: {
               $gte: new Date(fromTime * 1000),
               $lte: new Date(toTime * 1000),
@@ -194,9 +102,149 @@ const getBarsTvchart = async (req, res) => {
             date: 1,
           },
         },
-
         {
           $project: {
+            date: { $toLong: "$date" },
+            ycp: "$dsex.index",
+            close: "$dsex.index",
+            high: "$dsex.index",
+            low: "$dsex.index",
+            volume: "$totalVolume",
+          },
+        },
+      ]);
+    }
+    let indexdata = {
+      Response: "Success",
+      Data: index,
+    };
+    return res.status(200).json(indexdata);
+  }
+
+  let latestPrice = [];
+
+  if (resolutionType === "intraday") {
+    const prices = await MinutePrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          time: {
+            $lte: new Date(toTime * 1000),
+          },
+        },
+      },
+      {
+        $sort: {
+          time: -1,
+        },
+      },
+      {
+        $limit: Number(limit),
+      },
+      {
+        $sort: {
+          time: 1,
+        },
+      },
+      {
+        $project: {
+          time: { $toLong: "$time" },
+          open: 1,
+          close: 1,
+          high: 1,
+          low: 1,
+          ltp: 1,
+          ycp: 1,
+          volume: 1,
+        },
+      },
+    ]);
+
+    let volume;
+    for (let i = 1; i < prices.length; i++) {
+      const currentTime = new Date(prices[i].time);
+      const prevTime = new Date(prices[i - 1].time);
+
+      let currentday = currentTime.getDate();
+      let prevday = prevTime.getDate();
+
+      if (currentday == prevday) {
+        volume = prices[i].volume - prices[i - 1].volume;
+      } else {
+        volume = prices[i].volume;
+      }
+      latestPrice.push({
+        ...prices[i],
+        volume: volume,
+      });
+    }
+  } else {
+    const prices = await DailyPrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          date: {
+            $gte: new Date(fromTime * 1000),
+            $lte: new Date(toTime * 1000),
+          },
+        },
+      },
+      {
+        $sort: {
+          date: 1,
+        },
+      },
+      {
+        $project: {
+          time: { $toLong: "$date" },
+          open: 1,
+          close: 1,
+          high: 1,
+          low: 1,
+          ltp: 1,
+          ycp: 1,
+          volume: 1,
+        },
+      },
+    ]);
+
+    if (new Date() < new Date(toTime * 1000)) {
+      console.log("first");
+      const { dailyPriceUpdateDate } = await Setting.findOne().select(
+        "dailyPriceUpdateDate"
+      );
+
+      const todayPrices = await DayMinutePrice.aggregate([
+        {
+          $match: {
+            tradingCode: symbol,
+            date: {
+              $gt: dailyPriceUpdateDate,
+            },
+            ltp: { $ne: 0 },
+          },
+        },
+        {
+          $sort: {
+            time: 1,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            date: { $first: "$date" },
+            open: { $first: "$ltp" },
+            high: { $last: "$high" },
+            low: { $last: "$low" },
+            close: { $last: "$ltp" },
+            ltp: { $last: "$ltp" },
+            ycp: { $first: "$ycp" },
+            volume: { $last: "$volume" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
             time: { $toLong: "$date" },
             open: 1,
             close: 1,
@@ -209,21 +257,27 @@ const getBarsTvchart = async (req, res) => {
         },
       ]);
 
+      console.log(todayPrices);
+      latestPrice = formatCandleChartData([...prices, ...todayPrices]);
+    } else {
       latestPrice = formatCandleChartData(prices);
     }
-
-    let data = {
-      Response: "Success",
-      Data: latestPrice,
-    };
-    res.status(200).json(data);
-  } catch (error) {
-    let data = {
-      Response: "Error",
-      Data: [],
-    };
-    res.status(400).json(data);
   }
+
+  console.log(new Date(fromTime * 1000), new Date(toTime * 1000), new Date());
+
+  let data = {
+    Response: "Success",
+    Data: latestPrice,
+  };
+  res.status(200).json(data);
+  // } catch (error) {
+  //   let data = {
+  //     Response: "Error",
+  //     Data: [],
+  //   };
+  //   res.status(400).json(data);
+  // }
 };
 
 /*
@@ -757,11 +811,24 @@ const stockDetails = async (req, res, next) => {
         latest: [
           {
             $sort: {
-              time: -1,
+              time: 1,
             },
           },
           {
-            $limit: 1,
+            $group: {
+              _id: null,
+              open: { $first: "$ltp" },
+              high: { $last: "$high" },
+              low: { $last: "$low" },
+              close: { $last: "$close" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              change: { $last: "$change" },
+              percentChange: { $last: "$percentChange" },
+              trade: { $last: "$trade" },
+              volume: { $last: "$volume" },
+              value: { $last: "$value" },
+            },
           },
         ],
         minute: [
@@ -818,6 +885,7 @@ const stockDetails = async (req, res, next) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
+              ltp: { $ne: 0 },
             },
           },
           {
@@ -830,8 +898,8 @@ const stockDetails = async (req, res, next) => {
               _id: null,
               date: { $first: "$date" },
               open: { $first: "$ltp" },
-              high: { $max: "$high" },
-              low: { $min: "$low" },
+              high: { $last: "$high" },
+              low: { $last: "$low" },
               close: { $last: "$ltp" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
@@ -3943,6 +4011,7 @@ const newtest = async (req, res) => {
   Helper functions
 */
 const formatCandleChartData = (data) => {
+  // console.log(data);
   let candle = [];
 
   for (let i = 0; i < data.length; i++) {
