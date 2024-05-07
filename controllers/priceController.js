@@ -311,20 +311,9 @@ const getAllStocks = async (req, res, next) => {
   @access:    public
 */
 const getIpoList = async (req, res, next) => {
-  const today = new Date();
-  // today.setMinutes(0);
-  // today.setSeconds(0);
-  // today.setHours(0);
-  // today.setMilliseconds(0);
-  // console.log(today);
-
-  const ipo = await Ipo.find({
-    subscriptionEnd: {
-      $gte: today,
-    },
-    isActive: true,
-  });
-
+  const ipo = await Ipo.find({ isActive: true })
+    .sort({ subscriptionEnd: -1 })
+    .limit(20);
   res.status(200).json(ipo);
 };
 
@@ -817,6 +806,8 @@ const stockDetails = async (req, res, next) => {
           {
             $group: {
               _id: null,
+              date: { $last: "$date" },
+              time: { $last: "$time" },
               open: { $first: "$ltp" },
               high: { $last: "$high" },
               low: { $last: "$low" },
@@ -1214,6 +1205,8 @@ const stockDetails = async (req, res, next) => {
     let negativeValues = [];
     let zeroValues = [];
 
+    console.log(sectorRatio);
+
     for (let item of sectorInitialData) {
       if (item.value > 0) {
         positiveValues.push(item);
@@ -1229,6 +1222,8 @@ const stockDetails = async (req, res, next) => {
       ...zeroValues,
       ...negativeValues.sort((a, b) => b.value - a.value),
     ];
+
+    console.log(sectorData);
 
     const position =
       sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
