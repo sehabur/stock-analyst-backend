@@ -256,51 +256,51 @@ const updateUserProfile = async (req, res, next) => {
   @access:    private
 */
 const getAllPortfolioByUser = async (req, res, next) => {
-  try {
-    const { user } = url.parse(req.url, true).query;
-    const portfolio = await Portfolio.find({ user })
-      .sort({ createdAt: -1 })
-      .populate("items");
+  // try {
+  const { user } = url.parse(req.url, true).query;
+  const portfolio = await Portfolio.find({ user })
+    .sort({ createdAt: -1 })
+    .populate("items");
 
-    const count = portfolio.length;
+  const count = portfolio.length;
 
-    const latestPrices = await LatestPrice.find();
+  const latestPrices = await LatestPrice.find();
 
-    const result = [];
-    for (let i = 0; i < count; i++) {
-      let totalCost = 0;
-      let totalSellValue = 0;
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    let totalCost = 0;
+    let totalSellValue = 0;
 
-      portfolio[i].items.forEach((stock) => {
-        totalCost += stock.totalPrice;
+    portfolio[i].items.forEach((stock) => {
+      totalCost += stock.totalPrice;
 
-        const sellPrice = latestPrices.find(
-          (item) => item.tradingCode === "GP"
-        ).ltp;
+      const sellPrice = latestPrices.find(
+        (item) => item.tradingCode === stock.tradingCode
+      ).ltp;
 
-        const sellValue = sellPrice * stock.quantity;
-        totalSellValue += sellValue;
-      });
+      const sellValue = sellPrice * stock.quantity;
+      totalSellValue += sellValue;
+    });
 
-      const unrealizedGain = Number((totalSellValue - totalCost).toFixed(2));
-      const unrealizedGainPercent = Number(
-        ((unrealizedGain * 100) / totalCost).toFixed(2)
-      );
+    const unrealizedGain = Number((totalSellValue - totalCost).toFixed(2));
+    const unrealizedGainPercent = Number(
+      ((unrealizedGain * 100) / totalCost).toFixed(2)
+    );
 
-      result[i] = {
-        ...portfolio[i]._doc,
-        totalCost: Number(totalCost.toFixed(2)),
-        totalSellValue: Number(totalSellValue.toFixed(2)),
-        unrealizedGain,
-        unrealizedGainPercent,
-      };
-    }
-
-    res.status(200).json(result);
-  } catch (err) {
-    const error = createError(500, "Error occured");
-    next(error);
+    result[i] = {
+      ...portfolio[i]._doc,
+      totalCost: Number(totalCost.toFixed(2)),
+      totalSellValue: Number(totalSellValue.toFixed(2)),
+      unrealizedGain,
+      unrealizedGainPercent,
+    };
   }
+
+  res.status(200).json(result);
+  // } catch (err) {
+  //   const error = createError(500, "Error occured");
+  //   next(error);
+  // }
 };
 
 /*
@@ -330,11 +330,64 @@ const createNewPortfolio = async (req, res, next) => {
   @desc:      Get portfolio by id
   @access:    private
 */
-const getPortfolioById = async (req, res, next) => {
+const getPortfolioDetailsById = async (req, res, next) => {
   try {
     const id = req.params.id;
+
     const portfolio = await Portfolio.findById(id).populate("items");
-    res.status(200).json(portfolio);
+
+    const latestPrices = await LatestPrice.find();
+
+    let totalPortfolioBuyPrice = 0;
+    let totalPortfolioSellPrice = 0;
+
+    const stockItems = portfolio.items.map((item) => {
+      const sellPrice = latestPrices.find(
+        (latestPrice) => latestPrice.tradingCode === item.tradingCode
+      ).ltp;
+
+      const sellValue = sellPrice * item.quantity;
+
+      const unrealizedGain = Number((sellValue - item.totalPrice).toFixed(2));
+
+      const unrealizedGainPercent = Number(
+        ((unrealizedGain * 100) / item.totalPrice).toFixed(2)
+      );
+
+      totalPortfolioBuyPrice += item.totalPrice;
+      totalPortfolioSellPrice += sellValue;
+
+      return {
+        tradingCode: item.tradingCode,
+        quantity: item.quantity,
+        buyPrice: item.price,
+        totalBuyPrice: item.totalPrice,
+        sellPrice: sellPrice,
+        totalSellPrice: sellValue,
+        unrealizedGain,
+        unrealizedGainPercent,
+      };
+    });
+
+    const totalUnrealizedGain = Number(
+      (totalPortfolioSellPrice - totalPortfolioBuyPrice).toFixed(2)
+    );
+    const totalUnrealizedGainPercent = Number(
+      ((totalUnrealizedGain * 100) / totalPortfolioBuyPrice).toFixed(2)
+    );
+
+    const finalData = {
+      _id: portfolio._id,
+      name: portfolio.name,
+      commission: portfolio.commission,
+      totalPortfolioBuyPrice,
+      totalPortfolioSellPrice,
+      totalUnrealizedGain,
+      totalUnrealizedGainPercent,
+      stocks: stockItems,
+    };
+
+    res.status(200).json(finalData);
   } catch (err) {
     const error = createError(500, "Error occured");
     next(error);
@@ -350,6 +403,12 @@ const deletePortfolio = async (req, res, next) => {
   try {
     const id = req.params.id;
     const portfolio = await Portfolio.findByIdAndDelete(id);
+
+    // for (itemId of portfolio.items) {
+    //   await PortfolioItem.findByIdAndDelete(itemId);
+    // }
+    await PortfolioItem.deleteMany({ _id: { $in: portfolio.items } });
+
     res.status(200).json(portfolio);
   } catch (err) {
     const error = createError(500, "Error occured");
@@ -500,7 +559,7 @@ module.exports = {
   //   setNewPassword,
   getAllPortfolioByUser,
   createNewPortfolio,
-  getPortfolioById,
+  getPortfolioDetailsById,
   deletePortfolio,
   createBuyRequest,
   createSellRequest,

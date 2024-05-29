@@ -8,12 +8,18 @@ const getMarketOpenStatus = async () => {
   );
 
   const nowdate = new Date();
-  let nowhour = nowdate.getHours();
-  let nowminute = nowdate.getMinutes();
+  let nowhour = nowdate.getUTCHours();
+  let nowminute = nowdate.getUTCMinutes();
 
-  let isMarketOpen = true;
+  let isMarketOpen = false;
 
-  // console.log(nowhour, nowminute, MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE);
+  // console.log(
+  //   nowdate,
+  //   nowhour,
+  //   nowminute,
+  //   MARKET_CLOSE_HOUR,
+  //   MARKET_CLOSE_MINUTE
+  // );
 
   if (dataInsertionEnable === 0) {
     isMarketOpen = false;
@@ -33,6 +39,78 @@ const getMarketOpenStatus = async () => {
   return isMarketOpen;
 };
 
+function calculateReturns(prices) {
+  const returns = [];
+  for (let i = 1; i < prices.length; i++) {
+    const dailyReturn = (prices[i] - prices[i - 1]) / prices[i - 1];
+    returns.push(dailyReturn);
+  }
+  return returns;
+}
+
+function calculateSlope(x, y) {
+  const n = x.length;
+  const meanX = x.reduce((sum, value) => sum + value, 0) / n;
+  const meanY = y.reduce((sum, value) => sum + value, 0) / n;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (let i = 0; i < n; i++) {
+    numerator += (x[i] - meanX) * (y[i] - meanY);
+    denominator += (x[i] - meanX) * (x[i] - meanX);
+  }
+
+  return numerator / denominator;
+}
+
+function groupBy(array, key) {
+  return array.reduce((result, currentValue) => {
+    const groupKey = currentValue[key];
+
+    if (!result[groupKey]) {
+      result.push({
+        tradingCode: groupKey,
+        data: [],
+      });
+    }
+
+    const index = result.findIndex((item) => item.tradingCode == groupKey);
+
+    result[index].data.push({
+      date: currentValue.date,
+      ltp: currentValue.ltp,
+    });
+
+    return result;
+  }, []);
+}
+
+function calculateBeta(stockData, marketData) {
+  const marketPrices = marketData.map((entry) => entry.ltp);
+  const marketReturns = calculateReturns(marketPrices);
+
+  const groupedData = groupBy(stockData, "tradingCode");
+
+  console.log(groupedData.length);
+
+  let betaList = [];
+  for (stock of groupedData) {
+    const stockPrices = stock.data.map((entry) => entry.ltp);
+
+    const stockReturns = calculateReturns(stockPrices);
+
+    const beta = calculateSlope(marketReturns, stockReturns);
+
+    betaList.push({
+      tradingCode: stock.tradingCode,
+      beta,
+    });
+  }
+
+  return betaList;
+}
+
 module.exports = {
   getMarketOpenStatus,
+  calculateBeta,
 };

@@ -5,10 +5,13 @@ const {
   getStocksList,
   getIpoList,
   latestPrice,
+  indexMover,
   latestPricesBySearch,
   sectorWiseLatestPrice,
   dailySectorPrice,
+  allStockBeta,
   stockDetails,
+  technicals,
   allGainerLoser,
   indexMinuteData,
   newsByStock,
@@ -25,6 +28,10 @@ const router = express.Router();
 
 router.route("/latestPrice").get(latestPrice);
 
+router.route("/indexMover").get(indexMover);
+
+router.route("/allStockBeta").get(allStockBeta);
+
 router.route("/getStocksList").get(getStocksList);
 
 router.route("/getAllStocks").get(getAllStocks);
@@ -38,6 +45,8 @@ router.route("/sectorWiseLatestPrice").get(sectorWiseLatestPrice);
 router.route("/dailySectorPrice/:sectorTag").get(dailySectorPrice);
 
 router.route("/stock/:code").get(stockDetails);
+
+router.route("/technical/stock/:code").get(technicals);
 
 router.route("/news/:code").get(newsByStock);
 

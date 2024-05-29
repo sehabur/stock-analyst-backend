@@ -14,9 +14,26 @@ const Setting = require("../models/settingModel");
 const DayMinutePrice = require("../models/onedayMinutePriceModel");
 const Ipo = require("../models/ipoModel");
 
-const { sectorList, circuitMoveRange } = require("../data/dse");
+const {
+  sectorList,
+  circuitMoveRange,
+  ds30Shares,
+  dsexShares,
+} = require("../data/dse");
 
 const { getMarketOpenStatus } = require("../helper/price");
+
+const {
+  calculateSmaLastValue,
+  calculateEmaLastValue,
+  calculateRsiLastValue,
+  calculateStochasticKLastValue,
+  calculateAdxLastValue,
+  calculateMacdLastValue,
+  calculateWilliamsPercentRLastValue,
+  calculateMoneyFlowIndexLastValue,
+  calculatePivotPoints,
+} = require("../helper/movingAverage");
 
 /*
   @api:       GET /api/prices/getSymbolTvchart/
@@ -34,12 +51,16 @@ const getSymbolTvchart = async (req, res) => {
         stocks: data,
         index: [
           {
-            code: "DSEX",
-            name: "DHAKA STOCK EXCHANGE INDEX",
+            code: "00DSEX",
+            name: "DHAKA STOCK EXCHANGE INDEX (DSEX)",
           },
           {
-            code: "DSES",
-            name: "DHAKA STOCK EXCHANGE SHARIAH INDEX",
+            code: "00DSES",
+            name: "DHAKA STOCK EXCHANGE SHARIAH INDEX (DSES)",
+          },
+          {
+            code: "00DS30",
+            name: "DHAKA STOCK EXCHANGE 30 (DS30)",
           },
         ],
         sectors: sectorList.map((item) => ({
@@ -56,41 +77,21 @@ const getSymbolTvchart = async (req, res) => {
   @access:    public
 */
 const getBarsTvchart = async (req, res) => {
-  const { exchange, symbol, resolutionType, fromTime, toTime, limit } =
-    url.parse(req.url, true).query;
+  try {
+    const { symbol, symbolType, resolutionType, fromTime, toTime, limit } =
+      url.parse(req.url, true).query;
 
-  // try {
-  if (["DSEX", "DSES", "DSE30"].includes(symbol)) {
-    let index;
-    if (resolutionType === "intraday") {
-      index = await MinuteIndex.aggregate([
+    let dataTable;
+
+    let latestPrice = [];
+
+    if (resolutionType == "day" && symbolType != "sector") {
+      dataTable = "daily_prices";
+
+      const prices = await DailyPrice.aggregate([
         {
           $match: {
-            time: {
-              $gte: new Date(fromTime * 1000),
-            },
-          },
-        },
-        {
-          $sort: {
-            time: 1,
-          },
-        },
-        {
-          $project: {
-            time: { $toLong: "$time" },
-            ycp: "$dsex.index",
-            close: "$dsex.index",
-            high: "$dsex.index",
-            low: "$dsex.index",
-            volume: "$totalVolume",
-          },
-        },
-      ]);
-    } else {
-      index = await DailyIndex.aggregate([
-        {
-          $match: {
+            tradingCode: symbol,
             date: {
               $gte: new Date(fromTime * 1000),
               $lte: new Date(toTime * 1000),
@@ -104,147 +105,6 @@ const getBarsTvchart = async (req, res) => {
         },
         {
           $project: {
-            date: { $toLong: "$date" },
-            ycp: "$dsex.index",
-            close: "$dsex.index",
-            high: "$dsex.index",
-            low: "$dsex.index",
-            volume: "$totalVolume",
-          },
-        },
-      ]);
-    }
-    let indexdata = {
-      Response: "Success",
-      Data: index,
-    };
-    return res.status(200).json(indexdata);
-  }
-
-  let latestPrice = [];
-
-  if (resolutionType === "intraday") {
-    const prices = await MinutePrice.aggregate([
-      {
-        $match: {
-          tradingCode: symbol,
-          time: {
-            $lte: new Date(toTime * 1000),
-          },
-        },
-      },
-      {
-        $sort: {
-          time: -1,
-        },
-      },
-      {
-        $limit: Number(limit),
-      },
-      {
-        $sort: {
-          time: 1,
-        },
-      },
-      {
-        $project: {
-          time: { $toLong: "$time" },
-          open: 1,
-          close: 1,
-          high: 1,
-          low: 1,
-          ltp: 1,
-          ycp: 1,
-          volume: 1,
-        },
-      },
-    ]);
-
-    let volume;
-    for (let i = 1; i < prices.length; i++) {
-      const currentTime = new Date(prices[i].time);
-      const prevTime = new Date(prices[i - 1].time);
-
-      let currentday = currentTime.getDate();
-      let prevday = prevTime.getDate();
-
-      if (currentday == prevday) {
-        volume = prices[i].volume - prices[i - 1].volume;
-      } else {
-        volume = prices[i].volume;
-      }
-      latestPrice.push({
-        ...prices[i],
-        volume: volume,
-      });
-    }
-  } else {
-    const prices = await DailyPrice.aggregate([
-      {
-        $match: {
-          tradingCode: symbol,
-          date: {
-            $gte: new Date(fromTime * 1000),
-            $lte: new Date(toTime * 1000),
-          },
-        },
-      },
-      {
-        $sort: {
-          date: 1,
-        },
-      },
-      {
-        $project: {
-          time: { $toLong: "$date" },
-          open: 1,
-          close: 1,
-          high: 1,
-          low: 1,
-          ltp: 1,
-          ycp: 1,
-          volume: 1,
-        },
-      },
-    ]);
-
-    if (new Date() < new Date(toTime * 1000)) {
-      console.log("first");
-      const { dailyPriceUpdateDate } = await Setting.findOne().select(
-        "dailyPriceUpdateDate"
-      );
-
-      const todayPrices = await DayMinutePrice.aggregate([
-        {
-          $match: {
-            tradingCode: symbol,
-            date: {
-              $gt: dailyPriceUpdateDate,
-            },
-            ltp: { $ne: 0 },
-          },
-        },
-        {
-          $sort: {
-            time: 1,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            date: { $first: "$date" },
-            open: { $first: "$ltp" },
-            high: { $last: "$high" },
-            low: { $last: "$low" },
-            close: { $last: "$ltp" },
-            ltp: { $last: "$ltp" },
-            ycp: { $first: "$ycp" },
-            volume: { $last: "$volume" },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
             time: { $toLong: "$date" },
             open: 1,
             close: 1,
@@ -257,27 +117,291 @@ const getBarsTvchart = async (req, res) => {
         },
       ]);
 
-      console.log(todayPrices);
-      latestPrice = formatCandleChartData([...prices, ...todayPrices]);
-    } else {
-      latestPrice = formatCandleChartData(prices);
+      if (new Date() < new Date(toTime * 1000)) {
+        console.log("first");
+        const { dailyPriceUpdateDate } = await Setting.findOne().select(
+          "dailyPriceUpdateDate"
+        );
+
+        const todayPrices = await DayMinutePrice.aggregate([
+          {
+            $match: {
+              tradingCode: symbol,
+              date: {
+                $gt: dailyPriceUpdateDate,
+              },
+              ltp: { $ne: 0 },
+            },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              open: { $first: "$ltp" },
+              high: { $last: "$high" },
+              low: { $last: "$low" },
+              close: { $last: "$ltp" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              volume: { $last: "$volume" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              time: { $toLong: "$date" },
+              open: 1,
+              close: 1,
+              high: 1,
+              low: 1,
+              ltp: 1,
+              ycp: 1,
+              volume: 1,
+            },
+          },
+        ]);
+        latestPrice = formatCandleChartData([...prices, ...todayPrices]);
+      } else {
+        latestPrice = formatCandleChartData(prices);
+      }
+    } else if (resolutionType == "intraday" && symbolType == "stock") {
+      dataTable = "minute_prices";
+
+      const prices = await MinutePrice.aggregate([
+        {
+          $match: {
+            tradingCode: symbol,
+            time: {
+              $lte: new Date(toTime * 1000),
+            },
+          },
+        },
+        {
+          $sort: {
+            time: -1,
+          },
+        },
+        {
+          $limit: Number(limit),
+        },
+        {
+          $sort: {
+            time: 1,
+          },
+        },
+        {
+          $project: {
+            time: { $toLong: "$time" },
+            open: 1,
+            close: 1,
+            high: 1,
+            low: 1,
+            ltp: 1,
+            ycp: 1,
+            volume: 1,
+          },
+        },
+      ]);
+
+      let volume;
+      for (let i = 1; i < prices.length; i++) {
+        const currentTime = new Date(prices[i].time);
+        const prevTime = new Date(prices[i - 1].time);
+
+        let currentday = currentTime.getDate();
+        let prevday = prevTime.getDate();
+
+        if (currentday == prevday) {
+          volume = prices[i].volume - prices[i - 1].volume;
+        } else {
+          volume = prices[i].volume;
+        }
+        latestPrice.push({
+          ...prices[i],
+          volume: volume,
+        });
+      }
+    } else if (resolutionType == "intraday" && symbolType == "index") {
+      dataTable = "index_minute_values";
+
+      let prices;
+
+      if (symbol == "00DSEX") {
+        prices = await MinuteIndex.aggregate([
+          {
+            $match: {
+              time: {
+                $lte: new Date(toTime * 1000),
+              },
+            },
+          },
+          {
+            $sort: {
+              time: -1,
+            },
+          },
+          {
+            $limit: Number(limit),
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $project: {
+              time: { $toLong: "$time" },
+              open: "$dsex.index",
+              ycp: "$dsex.index",
+              close: "$dsex.index",
+              ltp: "$dsex.index",
+              high: "$dsex.index",
+              low: "$dsex.index",
+              volume: "$totalVolume",
+            },
+          },
+        ]);
+      } else if (symbol == "00DSES") {
+        prices = await MinuteIndex.aggregate([
+          {
+            $match: {
+              time: {
+                $lte: new Date(toTime * 1000),
+              },
+            },
+          },
+          {
+            $sort: {
+              time: -1,
+            },
+          },
+          {
+            $limit: Number(limit),
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $project: {
+              time: { $toLong: "$time" },
+              open: "$dses.index",
+              ycp: "$dses.index",
+              close: "$dses.index",
+              ltp: "$dses.index",
+              high: "$dses.index",
+              low: "$dses.index",
+              volume: "$totalVolume",
+            },
+          },
+        ]);
+      } else if (symbol == "00DS30") {
+        prices = await MinuteIndex.aggregate([
+          {
+            $match: {
+              time: {
+                $lte: new Date(toTime * 1000),
+              },
+            },
+          },
+          {
+            $sort: {
+              time: -1,
+            },
+          },
+          {
+            $limit: Number(limit),
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $project: {
+              time: { $toLong: "$time" },
+              open: "$dse30.index",
+              ycp: "$dse30.index",
+              close: "$dse30.index",
+              ltp: "$dse30.index",
+              high: "$dse30.index",
+              low: "$dse30.index",
+              volume: "$totalVolume",
+            },
+          },
+        ]);
+      }
+
+      let volume;
+      for (let i = 1; i < prices.length; i++) {
+        const currentTime = new Date(prices[i].time);
+        const prevTime = new Date(prices[i - 1].time);
+
+        let currentday = currentTime.getDate();
+        let prevday = prevTime.getDate();
+
+        if (currentday == prevday) {
+          volume = prices[i].volume - prices[i - 1].volume;
+        } else {
+          volume = prices[i].volume;
+        }
+        latestPrice.push({
+          ...prices[i],
+          volume: volume,
+        });
+      }
+    } else if (resolutionType == "day" && symbolType == "sector") {
+      dataTable = "daily_sectors";
+
+      const sectorPrices = await DailySector.aggregate([
+        {
+          $match: {
+            sector: symbol,
+            date: {
+              $gte: new Date(fromTime * 1000),
+              $lte: new Date(toTime * 1000),
+            },
+          },
+        },
+        {
+          $sort: {
+            date: 1,
+          },
+        },
+        {
+          $project: {
+            time: { $toLong: "$date" },
+            open: 1,
+            close: 1,
+            high: 1,
+            low: 1,
+            ltp: 1,
+            ycp: 1,
+            volume: 1,
+          },
+        },
+      ]);
+      latestPrice = sectorPrices;
     }
+
+    let data = {
+      Response: "Success",
+      Data: latestPrice,
+    };
+    res.status(200).json(data);
+  } catch (error) {
+    let data = {
+      Response: "Error",
+      Data: [],
+    };
+    res.status(400).json(data);
   }
-
-  console.log(new Date(fromTime * 1000), new Date(toTime * 1000), new Date());
-
-  let data = {
-    Response: "Success",
-    Data: latestPrice,
-  };
-  res.status(200).json(data);
-  // } catch (error) {
-  //   let data = {
-  //     Response: "Error",
-  //     Data: [],
-  //   };
-  //   res.status(400).json(data);
-  // }
 };
 
 /*
@@ -370,6 +494,155 @@ const latestPrice = async (req, res, next) => {
     },
   ]);
   res.status(200).json(latestPrice);
+};
+
+/*
+  @api:       GET /api/prices/indexMover?type={all | top}&count={count}
+  @desc:      get latest share prices for all shares
+  @access:    public
+*/
+const indexMover = async (req, res, next) => {
+  const { type, count } = url.parse(req.url, true).query;
+
+  const latestPrice = await LatestPrice.aggregate([
+    {
+      $match: {
+        ltp: { $ne: 0 },
+      },
+    },
+    {
+      $lookup: {
+        from: "fundamentals",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "fundamentals",
+      },
+    },
+    { $unwind: "$fundamentals" },
+    {
+      $project: {
+        id: "$_id",
+        _id: 0,
+        tradingCode: 1,
+        marketCap: "$fundamentals.marketCap",
+        open: "$ycp",
+        ltp: 1,
+      },
+    },
+  ]);
+
+  const { minuteDataUpdateDate } = await Setting.findOne();
+
+  const index = await MinuteIndex.aggregate([
+    {
+      $match: {
+        date: minuteDataUpdateDate,
+      },
+    },
+    {
+      $sort: {
+        time: 1,
+      },
+    },
+    {
+      $limit: 1,
+    },
+  ]);
+
+  const totalMarketCap = latestPrice
+    .filter((stock) => dsexShares.includes(stock.tradingCode))
+    .reduce((total, current) => {
+      return total + current.marketCap;
+    }, 0);
+
+  const movers = latestPrice.map((stock) => ({
+    ...stock,
+    indexMove: Number(
+      (
+        ((stock.ltp - stock.open) * stock.marketCap * index[0].dsex.index) /
+        (stock.open * totalMarketCap)
+      ).toFixed(2)
+    ),
+  }));
+  let finalRes;
+
+  const loser = movers
+    .filter((item) => item.indexMove < 0)
+    .sort((a, b) => a.indexMove - b.indexMove);
+  const gainer = movers
+    .filter((item) => item.indexMove > 0)
+    .sort((a, b) => b.indexMove - a.indexMove);
+
+  if (type == "all") {
+    finalRes = {
+      gainer,
+      loser,
+    };
+  } else if (type == "top") {
+    finalRes = {
+      gainer: gainer.slice(0, Number(count)),
+      loser: loser.slice(0, Number(count)),
+    };
+  }
+
+  res.status(200).json(finalRes);
+};
+
+/*
+  @api:       GET /api/prices/allStockBeta?type={all | top}&count={count}
+  @desc:      get latest share prices for all shares
+  @access:    public
+*/
+const allStockBeta = async (req, res, next) => {
+  const { type, count } = url.parse(req.url, true).query;
+
+  const beta = await LatestPrice.aggregate([
+    {
+      $match: {
+        ltp: { $ne: 0 },
+      },
+    },
+    {
+      $lookup: {
+        from: "fundamentals",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "fundamentals",
+      },
+    },
+    { $unwind: "$fundamentals" },
+    {
+      $project: {
+        id: "$_id",
+        _id: 0,
+        tradingCode: 1,
+        beta: "$fundamentals.technicals.beta",
+        ltp: 1,
+      },
+    },
+  ]);
+
+  const loser = beta
+    .filter((item) => item.beta < 0)
+    .sort((a, b) => a.beta - b.beta);
+
+  const gainer = beta
+    .filter((item) => item.beta > 0)
+    .sort((a, b) => b.beta - a.beta);
+
+  if (type == "all") {
+    finalRes = {
+      gainer,
+      loser,
+    };
+  } else if (type == "top") {
+    finalRes = {
+      gainer: gainer.slice(0, Number(count)),
+      loser: loser.slice(0, Number(count)),
+    };
+  }
+
+  res.status(200).json(finalRes);
 };
 
 /*
@@ -770,6 +1043,105 @@ const dailySectorPrice = async (req, res, next) => {
   ]);
 
   res.status(200).json({ minute: minuteSector, ...dailySector[0] });
+};
+
+/*
+  @api:       GET /api/prices/technical/stock/:code
+  @desc:      get stock technicals
+  @access:    public
+*/
+const technicals = async (req, res, next) => {
+  const tradingCode = req.params.code;
+
+  const queryLimit = 260; // default to 1 year //
+
+  const dailyPrice = await DailyPrice.aggregate([
+    {
+      $match: {
+        tradingCode,
+      },
+    },
+    {
+      $sort: {
+        date: -1,
+      },
+    },
+    {
+      $limit: queryLimit,
+    },
+    {
+      $sort: {
+        date: 1,
+      },
+    },
+    {
+      $project: {
+        date: 1,
+        high: 1,
+        low: 1,
+        ltp: 1,
+        volume: 1,
+      },
+    },
+  ]);
+
+  const prices = dailyPrice.map((item) => item.ltp);
+  const lows = dailyPrice.map((item) => item.low);
+  const highs = dailyPrice.map((item) => item.high);
+  const volumes = dailyPrice.map((item) => item.volume);
+
+  const sma10 = calculateSmaLastValue(prices, 10);
+  const sma20 = calculateSmaLastValue(prices, 20);
+  const sma30 = calculateSmaLastValue(prices, 30);
+  const sma50 = calculateSmaLastValue(prices, 50);
+  const sma100 = calculateSmaLastValue(prices, 100);
+  const sma200 = calculateSmaLastValue(prices, 200);
+
+  const ema10 = calculateEmaLastValue(prices, 10);
+  const ema20 = calculateEmaLastValue(prices, 20);
+  const ema30 = calculateEmaLastValue(prices, 30);
+  const ema50 = calculateEmaLastValue(prices, 50);
+  const ema100 = calculateEmaLastValue(prices, 100);
+  const ema200 = calculateEmaLastValue(prices, 200);
+
+  const rsi = calculateRsiLastValue(prices);
+  const stoch = calculateStochasticKLastValue(prices);
+  const adx = calculateAdxLastValue(highs, lows, prices);
+  const williamR = calculateWilliamsPercentRLastValue(highs, lows, prices);
+  const mfi = calculateMoneyFlowIndexLastValue(highs, lows, prices, volumes);
+  const macd = calculateMacdLastValue(prices);
+
+  const lastPrice = dailyPrice.slice(-1)[0];
+
+  const pivots = calculatePivotPoints(
+    lastPrice.high,
+    lastPrice.low,
+    lastPrice.ltp
+  );
+
+  // console.log(prices, rsi, stoch, adx, williamR, mfi, macd, lastPrice, pivots);
+
+  res.status(200).json({
+    sma10,
+    sma20,
+    sma30,
+    sma50,
+    sma100,
+    sma200,
+    ema10,
+    ema20,
+    ema30,
+    ema50,
+    ema100,
+    ema200,
+    rsi,
+    stoch,
+    adx,
+    williamR,
+    mfi,
+    macd,
+    pivots,
+  });
 };
 
 /*
@@ -1205,8 +1577,6 @@ const stockDetails = async (req, res, next) => {
     let negativeValues = [];
     let zeroValues = [];
 
-    console.log(sectorRatio);
-
     for (let item of sectorInitialData) {
       if (item.value > 0) {
         positiveValues.push(item);
@@ -1222,8 +1592,6 @@ const stockDetails = async (req, res, next) => {
       ...zeroValues,
       ...negativeValues.sort((a, b) => b.value - a.value),
     ];
-
-    console.log(sectorData);
 
     const position =
       sectorData.findIndex((item) => item.tradingCode === tradingCode) + 1;
@@ -1261,8 +1629,11 @@ const stockDetails = async (req, res, next) => {
     return {
       value,
       period,
-      min: sectorData[0].value,
-      max: sectorData[totalItems - 1].value,
+      position,
+      min: 1,
+      max: totalItems,
+      // min: sectorData[0].value,
+      // max: sectorData[totalItems - 1].value,
       comment: positionText + " in sector(out of " + totalItems + ")",
       overview:
         title +
@@ -1280,13 +1651,13 @@ const stockDetails = async (req, res, next) => {
     circuitUp,
     circuitLow,
     pbv: fundamentalsBasic.screener.bookValue
-      ? formatRatioValues("pbv", "P/BV ratio")
+      ? formatRatioValues("pbv", "P/Bv ratio", true)
       : null,
     pe: fundamentalsBasic.epsCurrent
       ? formatRatioValues("pe", "P/E ratio", true)
       : null,
     pcf: fundamentalsBasic.screener.nocfpsQuarterly
-      ? formatRatioValues("pcf", "P/CF ratio", true)
+      ? formatRatioValues("pcf", "P/Cf ratio", true)
       : null,
   };
 
@@ -1359,7 +1730,7 @@ const newsByStock = async (req, res, next) => {
 
   const { limit } = url.parse(req.url, true).query;
 
-  const queryLimit = limit ? Number(limit) : 25;
+  const queryLimit = limit ? Number(limit) : 50;
 
   let news;
   if (tradingCode === "all") {
@@ -3359,23 +3730,47 @@ const allGainerLoser = async (req, res, next) => {
 const screener = async (req, res, next) => {
   const body = req.body;
 
-  filters = {};
+  let filters = {};
+
+  let candlestick = null;
 
   for (key in body) {
-    filters[key] = {};
-
     const value = body[key].split(";");
 
     const minvalue = value[0];
     const maxvalue = value[1];
 
-    if (["sector", "category"].includes(key)) {
+    if (["sector", "category", "patterns", "candlestick"].includes(key)) {
+      filters[key] = {};
+
       filters[key]["$eq"] = value[0].toString();
+    } else if (["sma20", "sma50", "sma200"].includes(key)) {
+      filters["$expr"] = {};
+
+      const param = value[2];
+      const datapoint1 = "$" + minvalue;
+      const datapoint2 = "$" + maxvalue;
+
+      if (param == "gt") {
+        filters["$expr"]["$gt"] = [datapoint1, datapoint2];
+      } else if (param == "lt") {
+        filters["$expr"]["$lt"] = [datapoint1, datapoint2];
+      } else if (param == "eq") {
+        filters["$expr"]["$eq"] = [datapoint1, datapoint2];
+      }
     } else {
+      filters[key] = {};
+
       if (minvalue !== "null") filters[key]["$gte"] = Number(minvalue);
       if (maxvalue !== "null") filters[key]["$lte"] = Number(maxvalue);
     }
   }
+
+  console.log(filters);
+
+  const { minuteDataUpdateDate } = await Setting.findOne().select(
+    "minuteDataUpdateDate"
+  );
 
   const data = await Fundamental.aggregate([
     {
@@ -3395,6 +3790,34 @@ const screener = async (req, res, next) => {
       $unwind: "$latest_prices",
     },
     {
+      $lookup: {
+        from: "daily_prices",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "lastday_prices",
+        pipeline: [
+          {
+            $match: {
+              date: {
+                $lt: minuteDataUpdateDate,
+              },
+            },
+          },
+          {
+            $sort: {
+              date: -1,
+            },
+          },
+          {
+            $limit: 1,
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$lastday_prices",
+    },
+    {
       $addFields: {
         ltp: {
           $cond: [
@@ -3409,14 +3832,134 @@ const screener = async (req, res, next) => {
       },
     },
     {
+      $addFields: {
+        oneMonthBeforeLtp: {
+          $cond: [
+            { $isNumber: "$lastday_prices.oneMonthBeforeData" },
+            "$lastday_prices.oneMonthBeforeData",
+            "$ltp",
+          ],
+        },
+        oneWeekBeforeLtp: {
+          $cond: [
+            { $isNumber: "$lastday_prices.oneWeekBeforeData" },
+            "$lastday_prices.oneWeekBeforeData",
+            "$ltp",
+          ],
+        },
+        sixMonthBeforeLtp: {
+          $cond: [
+            { $isNumber: "$lastday_prices.sixMonthBeforeData" },
+            "$lastday_prices.sixMonthBeforeData",
+            "$ltp",
+          ],
+        },
+        oneYearBeforeLtp: {
+          $cond: [
+            { $isNumber: "$lastday_prices.oneYearBeforeData" },
+            "$lastday_prices.oneYearBeforeData",
+            "$ltp",
+          ],
+        },
+        fiveYearBeforeLtp: {
+          $cond: [
+            { $isNumber: "$lastday_prices.fiveYearBeforeData" },
+            "$lastday_prices.fiveYearBeforeData",
+            "$ltp",
+          ],
+        },
+      },
+    },
+    {
       $project: {
         id: "$_id",
+        _id: 0,
         tradingCode: 1,
         sector: 1,
         ltp: 1,
+        category: 1,
         volume: "$latest_prices.volume",
         pricePercentChange: "$latest_prices.percentChange",
-        category: 1,
+        pricePercentChangeOneWeek: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $divide: [
+                    { $subtract: ["$ltp", "$oneWeekBeforeLtp"] },
+                    "$oneWeekBeforeLtp",
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
+        pricePercentChangeOneMonth: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $divide: [
+                    { $subtract: ["$ltp", "$oneMonthBeforeLtp"] },
+                    "$oneMonthBeforeLtp",
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
+        pricePercentChangeSixMonth: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $divide: [
+                    { $subtract: ["$ltp", "$sixMonthBeforeLtp"] },
+                    "$sixMonthBeforeLtp",
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
+        pricePercentChangeOneYear: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $divide: [
+                    { $subtract: ["$ltp", "$oneYearBeforeLtp"] },
+                    "$oneYearBeforeLtp",
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
+        pricePercentChangeFiveYear: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $divide: [
+                    { $subtract: ["$ltp", "$fiveYearBeforeLtp"] },
+                    "$fiveYearBeforeLtp",
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
+          ],
+        },
         totalShares: {
           $round: [
             {
@@ -3425,7 +3968,14 @@ const screener = async (req, res, next) => {
             2,
           ],
         },
-        reserve: "$reserveSurplusWithoutOci",
+        reserve: {
+          $round: [
+            {
+              $divide: ["$screener.reserveSurplus.value", 10],
+            },
+            2,
+          ],
+        },
         marketCap: {
           $round: [
             {
@@ -3468,10 +4018,15 @@ const screener = async (req, res, next) => {
         nocfpsGrowthOneYear: "$screener.nocfpsYearly.percentChange",
         nocfpsGrowthQuarter: "$screener.nocfpsQuarterly.percentChange",
 
-        revenueGrowthOneYear: "$screener.revenue.percentChange",
-        revenueGrowthFiveYear: "$screener.revenue.percentChangeFiveYear",
-        revenueGrowthOneYear: "$screener.revenue.percentChange",
-        revenueGrowthFiveYear: "$screener.revenue.percentChangeFiveYear",
+        totalAssetGrowthOneYear: "$screener.totalAsset.percentChange",
+        totalAssetGrowthFiveYear: "$screener.totalAsset.percentChangeFiveYear",
+
+        netIncomeGrowthOneYear: "$screener.netIncome.percentChange",
+        netIncomeGrowthFiveYear: "$screener.netIncome.percentChangeFiveYear",
+
+        totalLiabilitiesGrowthOneYear:
+          "$screener.totalLiabilities.percentChange",
+        operatingProfitGrowthOneYear: "$screener.operatingProfit.percentChange",
 
         directorShareHolding: "$screener.shareholding.current.director",
         govtShareHolding: "$screener.shareholding.current.govt",
@@ -3496,6 +4051,17 @@ const screener = async (req, res, next) => {
             2,
           ],
         },
+
+        beta: "$technicals.beta",
+        rsi14: "$technicals.oscillators.rsi14",
+        patterns: "$technicals.patterns",
+        candlestick: "$technicals.candlestick.value",
+        sma20: "$technicals.movingAverages.sma20",
+        sma50: "$technicals.movingAverages.sma50",
+        sma200: "$technicals.movingAverages.sma200",
+        ema20: "$technicals.movingAverages.ema20",
+        ema50: "$technicals.movingAverages.ema50",
+        ema200: "$technicals.movingAverages.ema200",
       },
     },
     {
@@ -3509,6 +4075,8 @@ const screener = async (req, res, next) => {
       },
     },
   ]);
+
+  // console.log(data);
 
   res.status(200).json(data);
 };
@@ -4006,7 +4574,6 @@ const newtest = async (req, res) => {
   Helper functions
 */
 const formatCandleChartData = (data) => {
-  // console.log(data);
   let candle = [];
 
   for (let i = 0; i < data.length; i++) {
@@ -4045,9 +4612,12 @@ module.exports = {
   getStocksList,
   getIpoList,
   latestPrice,
+  indexMover,
   latestPricesBySearch,
   sectorWiseLatestPrice,
   dailySectorPrice,
+  allStockBeta,
+  technicals,
   stockDetails,
   indexMinuteData,
   newsByStock,

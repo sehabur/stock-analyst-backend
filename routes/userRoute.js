@@ -10,7 +10,7 @@ const {
   addFavoriteItem,
   getAllPortfolioByUser,
   createNewPortfolio,
-  getPortfolioById,
+  getPortfolioDetailsById,
   deletePortfolio,
   createBuyRequest,
   createSellRequest,
@@ -24,7 +24,10 @@ const {
 
 router.route("/portfolio").get(getAllPortfolioByUser).post(createNewPortfolio);
 
-router.route("/portfolio/:id").get(getPortfolioById).delete(deletePortfolio);
+router
+  .route("/portfolio/:id")
+  .get(getPortfolioDetailsById)
+  .delete(deletePortfolio);
 
 router.route("/trade/buy").patch(createBuyRequest);
 

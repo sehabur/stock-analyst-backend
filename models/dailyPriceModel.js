@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const dailyPriceSchema = mongoose.Schema(
   {
@@ -10,12 +10,30 @@ const dailyPriceSchema = mongoose.Schema(
       type: String,
       required: true,
     },
-  },
-  {
-    timestamps: true,
+    open: {
+      type: Number,
+    },
+    high: {
+      type: Number,
+    },
+    low: {
+      type: Number,
+    },
+    close: {
+      type: Number,
+    },
+    ltp: {
+      type: Number,
+    },
+    volume: {
+      type: Number,
+    },
   }
+  // {
+  //   timestamps: true,
+  // }
 );
 
-const DailyPrice = mongoose.model('Daily_price', dailyPriceSchema);
+const DailyPrice = mongoose.model("Daily_price", dailyPriceSchema);
 
 module.exports = DailyPrice;

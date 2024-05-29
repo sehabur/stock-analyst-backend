@@ -1,6 +1,7 @@
 const Fundamental = require("../models/fundamentalModel");
 
 const xlsx = require("xlsx");
+const DailyPrice = require("../models/dailyPriceModel");
 
 /*
   @api:       GET /api/dataInsert/eps/
@@ -36,6 +37,58 @@ const changeSector = async (req, res, next) => {
 
   res.send("updated");
 };
+
+const insertOldData = async (req, res, next) => {
+  const year = 2018;
+  for (let k = 11; k < 13; k++) {
+    let newData = [];
+
+    for (let j = 1; j < 32; j++) {
+      const dateValue = `${year}-${k}-${j}`;
+      console.log("Start:", dateValue);
+
+      const formData = new FormData();
+      formData.append("date", dateValue);
+
+      const response = await fetch(
+        `https://www.amarstock.com/data/download/CSV`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      const data = await response.text();
+
+      let array = data.split("\n");
+      array.shift();
+
+      for (let i = 0; i < array.length; i++) {
+        let values = array[i].split(",");
+
+        // if (["00DS30", "00DSES", "00DSEX"].includes(values[1])) {
+        let yr = values[0].slice(0, 4).toString();
+        let mo = values[0].slice(4, 6).toString();
+        let day = values[0].slice(6).toString();
+
+        newData.push({
+          date: new Date(yr + "-" + mo + "-" + day),
+          tradingCode: values[1],
+          open: Number(values[2]),
+          high: Number(values[3]),
+          low: Number(values[4]),
+          close: Number(values[5]),
+          ltp: Number(values[5]),
+          volume: Number(values[6]),
+        });
+        // }
+      }
+    }
+    let doc = await DailyPrice.create(newData);
+    console.log("** Success month ->", k);
+  }
+  res.json();
+};
+
 /*
   @api:       GET /api/dataInsert/eps/
   @desc:      insert eps quarterly data to collection 
@@ -368,4 +421,5 @@ module.exports = {
   insertFloorPrice,
   changeSector,
   insertAbout,
+  insertOldData,
 };
