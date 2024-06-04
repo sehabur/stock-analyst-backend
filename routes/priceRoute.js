@@ -11,6 +11,7 @@ const {
   dailySectorPrice,
   allStockBeta,
   stockDetails,
+  indexDetails,
   technicals,
   allGainerLoser,
   indexMinuteData,
@@ -46,6 +47,8 @@ router.route("/dailySectorPrice/:sectorTag").get(dailySectorPrice);
 
 router.route("/stock/:code").get(stockDetails);
 
+router.route("/index/:code").get(indexDetails);
+
 router.route("/technical/stock/:code").get(technicals);
 
 router.route("/news/:code").get(newsByStock);
@@ -60,11 +63,12 @@ router.route("/screener").post(screener);
 
 router.route("/topFinancials").get(topFinancials);
 
-router.route("/pytest").get(pytest);
-
 router.route("/getSymbolTvchart").get(getSymbolTvchart);
 
 router.route("/getBarsTvchart").get(getBarsTvchart);
+
+// Test functions //
+router.route("/pytest").get(pytest);
 
 router.route("/newtest").get(newtest);
 

@@ -17,22 +17,40 @@ const checkLogin = async (req, res, next) => {
         const user = await User.findById(decoded.id).select("-password -__v");
         if (user) {
           req.user = user;
-          next();
+          return next();
         } else {
           const error = createError(404, "User not found");
-          next(error);
+          return next(error);
         }
       } else {
         const error = createError(401, "Invalid Token");
-        next(error);
+        return next(error);
       }
     } else {
       const error = createError(401, "Invalid Token");
-      next(error);
+      return next(error);
     }
   } catch (err) {
     const error = createError(401, err.message);
-    next(error);
+    return next(error);
+  }
+};
+
+const checkPremium = async (req, res, next) => {
+  try {
+    const user = req.user;
+    console.log(user);
+    if (user.isPremium) {
+      return next();
+    } else {
+      return next({
+        status: 401,
+        message: "Improper access",
+      });
+    }
+  } catch (err) {
+    const error = createError(401, err.message);
+    return next(error);
   }
 };
 
@@ -47,5 +65,6 @@ const checkLogin = async (req, res, next) => {
 
 module.exports = {
   checkLogin,
+  checkPremium,
   // checkAdmin,
 };

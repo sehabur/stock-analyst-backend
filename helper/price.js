@@ -1,4 +1,8 @@
-const { MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE } = require("../data/constants");
+const {
+  MARKET_CLOSE_HOUR,
+  MARKET_CLOSE_MINUTE,
+  MARKET_PRE_CLOSE_MINUTE,
+} = require("../data/constants");
 
 const Setting = require("../models/settingModel");
 
@@ -11,32 +15,29 @@ const getMarketOpenStatus = async () => {
   let nowhour = nowdate.getUTCHours();
   let nowminute = nowdate.getUTCMinutes();
 
-  let isMarketOpen = false;
-
-  // console.log(
-  //   nowdate,
-  //   nowhour,
-  //   nowminute,
-  //   MARKET_CLOSE_HOUR,
-  //   MARKET_CLOSE_MINUTE
-  // );
+  let marketOpenStatus = "Closed";
 
   if (dataInsertionEnable === 0) {
-    isMarketOpen = false;
+    marketOpenStatus = "Closed";
   } else {
     if (nowhour > MARKET_CLOSE_HOUR) {
-      isMarketOpen = false;
+      marketOpenStatus = "Closed";
     } else if (nowhour == MARKET_CLOSE_HOUR) {
       if (nowminute > MARKET_CLOSE_MINUTE) {
-        isMarketOpen = false;
+        marketOpenStatus = "Closed";
+      } else if (
+        nowminute < MARKET_CLOSE_MINUTE &&
+        nowminute > MARKET_PRE_CLOSE_MINUTE
+      ) {
+        marketOpenStatus = "Post close";
       } else {
-        isMarketOpen = true;
+        marketOpenStatus = "Open";
       }
     } else {
-      isMarketOpen = true;
+      marketOpenStatus = "Open";
     }
   }
-  return isMarketOpen;
+  return marketOpenStatus;
 };
 
 function calculateReturns(prices) {

@@ -39,33 +39,37 @@ const changeSector = async (req, res, next) => {
 };
 
 const insertOldData = async (req, res, next) => {
-  const year = 2018;
-  for (let k = 11; k < 13; k++) {
-    let newData = [];
+  // const year = 2013;
+  // for (let year = 2000; year > 1999; year--) {
+  //   for (let k = 1; k < 13; k++) {
 
-    for (let j = 1; j < 32; j++) {
-      const dateValue = `${year}-${k}-${j}`;
-      console.log("Start:", dateValue);
+  let year = 2024;
+  let k = 5;
+  let newData = [];
 
-      const formData = new FormData();
-      formData.append("date", dateValue);
+  for (let j = 19; j < 27; j++) {
+    const dateValue = `${year}-${k}-${j}`;
+    console.log("Start:", dateValue);
 
-      const response = await fetch(
-        `https://www.amarstock.com/data/download/CSV`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-      const data = await response.text();
+    const formData = new FormData();
+    formData.append("date", dateValue);
 
-      let array = data.split("\n");
-      array.shift();
+    const response = await fetch(
+      `https://www.amarstock.com/data/download/CSV`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+    const data = await response.text();
 
-      for (let i = 0; i < array.length; i++) {
-        let values = array[i].split(",");
+    let array = data.split("\n");
+    array.shift();
 
-        // if (["00DS30", "00DSES", "00DSEX"].includes(values[1])) {
+    for (let i = 0; i < array.length; i++) {
+      let values = array[i].split(",");
+
+      if (["00DS30", "00DSES", "00DSEX"].includes(values[1])) {
         let yr = values[0].slice(0, 4).toString();
         let mo = values[0].slice(4, 6).toString();
         let day = values[0].slice(6).toString();
@@ -80,12 +84,13 @@ const insertOldData = async (req, res, next) => {
           ltp: Number(values[5]),
           volume: Number(values[6]),
         });
-        // }
       }
     }
-    let doc = await DailyPrice.create(newData);
-    console.log("** Success month ->", k);
   }
+  let doc = await DailyPrice.create(newData);
+  console.log("** Success month ->", k);
+  //   }
+  // }
   res.json();
 };
 

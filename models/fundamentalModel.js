@@ -4,6 +4,7 @@ const fundamentalSchema = mongoose.Schema(
   {
     tradingCode: { type: String, required: true },
     companyName: { type: String, required: true },
+    type: { type: String, required: true },
     marketLot: { type: Number, required: true },
     totalShares: { type: Number, required: true },
     sector: { type: String, required: true },

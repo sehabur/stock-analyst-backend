@@ -34,6 +34,7 @@ const {
   calculateMoneyFlowIndexLastValue,
   calculatePivotPoints,
 } = require("../helper/movingAverage");
+const DayMinuteIndex = require("../models/onedayMinuteIndexModel");
 
 /*
   @api:       GET /api/prices/getSymbolTvchart/
@@ -41,7 +42,7 @@ const {
   @access:    public
 */
 const getSymbolTvchart = async (req, res) => {
-  const data = await Fundamental.find({ isActive: true }).select(
+  const data = await Fundamental.find({ isActive: true, type: "stock" }).select(
     "tradingCode companyName"
   );
 
@@ -88,12 +89,14 @@ const getBarsTvchart = async (req, res) => {
     if (resolutionType == "day" && symbolType != "sector") {
       dataTable = "daily_prices";
 
+      const priorDayCount = 14;
+
       const prices = await DailyPrice.aggregate([
         {
           $match: {
             tradingCode: symbol,
             date: {
-              $gte: new Date(fromTime * 1000),
+              $gte: new Date((fromTime - 86400 * priorDayCount) * 1000),
               $lte: new Date(toTime * 1000),
             },
           },
@@ -470,6 +473,44 @@ const latestPrice = async (req, res, next) => {
       },
     },
     {
+      $unionWith: {
+        coll: "index_day_minute_values",
+        pipeline: [
+          {
+            $group: {
+              _id: "$tradingCode",
+              open: { $first: "$index" },
+              high: { $max: "$index" },
+              low: { $min: "$index" },
+              close: { $last: "$index" },
+              ltp: { $last: "$index" },
+              ycp: { $first: "$index" },
+              change: { $last: "$change" },
+              percentChange: { $last: "$percentChange" },
+              volume: { $last: "$volume" },
+              trade: { $last: "$trade" },
+              value: { $last: "$value" },
+            },
+          },
+          {
+            $project: {
+              open: { $round: ["$open", 2] },
+              high: { $round: ["$high", 2] },
+              low: { $round: ["$low", 2] },
+              close: { $round: ["$close", 2] },
+              ltp: { $round: ["$ltp", 2] },
+              ycp: { $round: ["$ycp", 2] },
+              change: { $round: ["$change", 2] },
+              percentChange: { $round: ["$percentChange", 2] },
+              value: 1,
+              volume: 1,
+              trade: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
       $lookup: {
         from: "fundamentals",
         localField: "_id",
@@ -598,8 +639,10 @@ const allStockBeta = async (req, res, next) => {
 
   const beta = await LatestPrice.aggregate([
     {
-      $match: {
-        ltp: { $ne: 0 },
+      $addFields: {
+        ltp: {
+          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        },
       },
     },
     {
@@ -621,6 +664,8 @@ const allStockBeta = async (req, res, next) => {
       },
     },
   ]);
+
+  // res.status(200).json(beta.length);
 
   const loser = beta
     .filter((item) => item.beta < 0)
@@ -1155,7 +1200,7 @@ const stockDetails = async (req, res, next) => {
 
   const { period } = url.parse(req.url, true).query;
 
-  const queryLimit = period ? Number(period) : 260; // default to 1 year //
+  const queryLimit = period ? Number(period) : 750; // default to 3 year //
 
   const { dailyPriceUpdateDate, minuteDataUpdateDate } =
     await Setting.findOne().select("dailyPriceUpdateDate minuteDataUpdateDate");
@@ -1661,13 +1706,316 @@ const stockDetails = async (req, res, next) => {
       : null,
   };
 
-  const isMarketOpen = await getMarketOpenStatus();
+  const marketOpenStatus = await getMarketOpenStatus();
 
   res.status(200).json({
     ...minutePrice[0],
     ...dailyPrice[0],
     fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
-    isMarketOpen,
+    marketOpenStatus,
+  });
+  // } catch (error) {
+  //   const err = createError(500, "Error Occured");
+  //   next(err);
+  // }
+};
+
+/*
+  @api:       GET /api/prices/index/:code?period={number}
+  @desc:      get stock fundamentals, latest price, minute charts
+  @access:    public
+*/
+const indexDetails = async (req, res, next) => {
+  // try {
+  const tradingCode = req.params.code;
+
+  const { period } = url.parse(req.url, true).query;
+
+  const queryLimit = period ? Number(period) : 750; // default to 3 year //
+
+  const { dailyPriceUpdateDate, minuteDataUpdateDate } =
+    await Setting.findOne().select("dailyPriceUpdateDate minuteDataUpdateDate");
+
+  let minutePrice = await DayMinuteIndex.aggregate([
+    {
+      $match: {
+        tradingCode,
+      },
+    },
+    {
+      $facet: {
+        latest: [
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              time: { $last: "$time" },
+              open: { $first: "$index" },
+              high: { $max: "$index" },
+              low: { $min: "$index" },
+              close: { $last: "$index" },
+              ltp: { $last: "$index" },
+              ycp: { $first: "$index" },
+              change: { $last: "$change" },
+              percentChange: { $last: "$percentChange" },
+              trade: { $last: "$trade" },
+              volume: { $last: "$volume" },
+              value: { $last: "$value" },
+            },
+          },
+          {
+            $project: {
+              time: 1,
+              open: { $round: ["$open", 2] },
+              high: { $round: ["$high", 2] },
+              low: { $round: ["$low", 2] },
+              close: { $round: ["$close", 2] },
+              ltp: { $round: ["$ltp", 2] },
+              ycp: { $round: ["$ycp", 2] },
+              change: { $round: ["$change", 2] },
+              percentChange: { $round: ["$percentChange", 2] },
+              value: 1,
+              volume: 1,
+              trade: 1,
+            },
+          },
+        ],
+        minute: [
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $project: {
+              time: 1,
+              ltp: "$index",
+              value: 1,
+              volume: 1,
+              trade: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$latest",
+    },
+  ]);
+
+  const dailyPrice = await DailyPrice.aggregate([
+    {
+      $match: {
+        tradingCode,
+      },
+    },
+    {
+      $sort: {
+        date: -1,
+      },
+    },
+    {
+      $limit: queryLimit,
+    },
+    {
+      $sort: {
+        date: 1,
+      },
+    },
+    {
+      $unionWith: {
+        coll: "index_day_minute_values",
+        pipeline: [
+          {
+            $match: {
+              tradingCode: tradingCode,
+              date: {
+                $gt: dailyPriceUpdateDate,
+              },
+            },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              open: { $first: "$ltp" },
+              high: { $last: "$high" },
+              low: { $last: "$low" },
+              close: { $last: "$ltp" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              // change: { $last: "$change" },
+              // percentChange: { $last: "$percentChange" },
+              // trade: { $last: "$trade" },
+              // value: { $last: "$value" },
+              volume: { $last: "$volume" },
+            },
+          },
+          {
+            $project: { _id: 0 },
+          },
+        ],
+      },
+    },
+    {
+      $facet: {
+        lastDay: [
+          {
+            $match: {
+              date: {
+                $lt: minuteDataUpdateDate,
+              },
+            },
+          },
+          {
+            $sort: {
+              date: -1,
+            },
+          },
+          {
+            $limit: 1,
+          },
+        ],
+        daily: [
+          {
+            $project: {
+              date: 1,
+              open: 1,
+              high: 1,
+              low: 1,
+              close: 1,
+              ltp: 1,
+              ycp: 1,
+              volume: 1,
+            },
+          },
+        ],
+        weekly: [
+          {
+            $match: {
+              ltp: { $ne: 0 },
+            },
+          },
+          {
+            $addFields: {
+              startOfWeek: {
+                $toDate: {
+                  $subtract: [
+                    "$date",
+                    {
+                      $multiply: [
+                        {
+                          $subtract: [
+                            {
+                              $dayOfWeek: "$date",
+                            },
+                            1,
+                          ],
+                        },
+                        24 * 60 * 60 * 1000,
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            $group: {
+              _id: "$startOfWeek",
+              open: { $first: "$open" },
+              high: { $max: "$high" },
+              low: { $min: "$low" },
+              close: { $last: "$ltp" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              volume: { $sum: "$volume" },
+              // trade: { $sum: "$trade" },
+              // value: { $sum: "$value" },
+            },
+          },
+          {
+            $addFields: {
+              date: "$_id",
+            },
+          },
+          {
+            $sort: {
+              _id: 1,
+            },
+          },
+        ],
+        monthly: [
+          {
+            $match: {
+              ltp: { $ne: 0 },
+            },
+          },
+          {
+            $addFields: {
+              startOfMonth: {
+                $dateFromParts: {
+                  year: {
+                    $year: { date: "$date", timezone: "Asia/Dhaka" },
+                  },
+                  month: {
+                    $month: { date: "$date", timezone: "Asia/Dhaka" },
+                  },
+                  day: 1,
+                },
+              },
+            },
+          },
+          {
+            $group: {
+              _id: "$startOfMonth",
+              open: { $first: "$open" },
+              high: { $max: "$high" },
+              low: { $min: "$low" },
+              close: { $last: "$ltp" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              volume: { $sum: "$volume" },
+              // trade: { $sum: "$trade" },
+              // value: { $sum: "$value" },
+            },
+          },
+          {
+            $addFields: {
+              date: "$_id",
+            },
+          },
+          {
+            $sort: {
+              _id: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$lastDay",
+    },
+  ]);
+
+  const fundamentals = await Fundamental.findOne({ tradingCode });
+
+  const marketOpenStatus = await getMarketOpenStatus();
+
+  res.status(200).json({
+    ...minutePrice[0],
+    ...dailyPrice[0],
+    fundamentals,
+    marketOpenStatus,
   });
   // } catch (error) {
   //   const err = createError(500, "Error Occured");
@@ -1715,9 +2063,9 @@ const indexMinuteData = async (req, res, next) => {
     },
   ]);
 
-  const isMarketOpen = await getMarketOpenStatus();
+  const marketOpenStatus = await getMarketOpenStatus();
 
-  res.status(200).json({ ...index[0], isMarketOpen });
+  res.status(200).json({ ...index[0], marketOpenStatus });
 };
 
 /*
@@ -3995,6 +4343,42 @@ const screener = async (req, res, next) => {
         pe: {
           $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
         },
+        pbv: {
+          $round: [
+            {
+              $divide: [
+                {
+                  $multiply: ["$ltp", "$totalShares"],
+                },
+                {
+                  $cond: [
+                    { $eq: ["$screener.bookValue.value", 0] },
+                    0.000001,
+                    "$screener.bookValue.value",
+                  ],
+                },
+              ],
+            },
+            2,
+          ],
+        },
+        pcf: {
+          $round: [
+            {
+              $divide: [
+                "$ltp",
+                {
+                  $cond: [
+                    { $eq: ["$screener.nocfpsQuarterly.value", 0] },
+                    0.000001,
+                    "$screener.nocfpsQuarterly.value",
+                  ],
+                },
+              ],
+            },
+            2,
+          ],
+        },
         de: "$screener.de.value",
         ps: "$screener.ps.value",
         roe: "$screener.roe.value",
@@ -4619,6 +5003,7 @@ module.exports = {
   allStockBeta,
   technicals,
   stockDetails,
+  indexDetails,
   indexMinuteData,
   newsByStock,
   blocktrByStock,
