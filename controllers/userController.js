@@ -2,12 +2,14 @@ const createError = require("http-errors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
-
 const url = require("url");
+
 const User = require("../models/userModel");
 const Portfolio = require("../models/portfolioModel");
 const PortfolioItem = require("../models/portfolioItemModel");
 const LatestPrice = require("../models/latestPriceModel");
+
+const { sendMailToUser } = require("../helper/mailer");
 
 /*
   @api:       POST /api/users/signin/
@@ -15,32 +17,27 @@ const LatestPrice = require("../models/latestPriceModel");
   @access:    public
 */
 const signin = async (req, res, next) => {
-  // try {
-  const { phone: phoneNumber, password } = req.body;
-  const user = await User.findOne({ phone: phoneNumber, isActive: true });
+  try {
+    const { phone: phoneNumber, password } = req.body;
+    const user = await User.findOne({ phone: phoneNumber, isActive: true });
 
-  if (!user) {
-    const error = createError(404, "User not found");
-    return next(error);
-  }
-  if (!user.isVerified) {
-    const error = createError(401, "User verification pending");
-    return next(error);
-  }
+    if (!user) {
+      const error = createError(404, "User not found");
+      return next(error);
+    }
+    if (!user.isVerified) {
+      const error = createError(401, "User verification pending");
+      return next(error);
+    }
 
-  result = await bcrypt.compare(password, user.password);
+    result = await bcrypt.compare(password, user.password);
 
-  if (!result) {
-    const error = createError(401, "Password incorrect");
-    return next(error);
-  }
+    if (!result) {
+      const error = createError(401, "Password incorrect");
+      return next(error);
+    }
 
-  const { _id, name, email, phone, portfolio, favorites, isActive, createdAt } =
-    user;
-
-  res.status(200).json({
-    message: "Login attempt successful",
-    user: {
+    const {
       _id,
       name,
       email,
@@ -48,15 +45,34 @@ const signin = async (req, res, next) => {
       portfolio,
       favorites,
       isActive,
+      isPremium,
+      premiumExpireDate,
+      isFreeTrialUsed,
       createdAt,
-      token: generateToken(_id),
-      isLoggedIn: true,
-    },
-  });
-  // } catch (err) {
-  //   const error = createError(500, "Login failed. Unknown Error");
-  //   next(error);
-  // }
+    } = user;
+
+    res.status(200).json({
+      message: "Login attempt successful",
+      user: {
+        _id,
+        name,
+        email,
+        phone,
+        portfolio,
+        favorites,
+        isActive,
+        isPremium,
+        createdAt,
+        premiumExpireDate,
+        isFreeTrialUsed,
+        token: generateToken(_id),
+        isLoggedIn: true,
+      },
+    });
+  } catch (err) {
+    const error = createError(500, "Login failed. Unknown Error");
+    next(error);
+  }
 };
 
 /*
@@ -114,7 +130,7 @@ const getUserProfileById = async (req, res, next) => {
     const user = await User.findById(userId).select("-password -__v");
 
     if (user) {
-      res.status(200).json({ user });
+      res.status(200).json(user);
     } else {
       const error = createError(404, "User not found");
       next(error);
@@ -164,79 +180,18 @@ const addFavoriteItem = async (req, res, next) => {
 */
 const updateUserProfile = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-
-    if (!errors.isEmpty()) {
-      return res.status(400).json(errors);
-    }
     const userId = req.params.id;
-    const {
-      firstName,
-      lastName,
-      rollNo,
-      batch,
-      departmentLong,
-      departmentShort,
-      homeDistrict,
-      presentDistrict,
-      currentlyLiveIn,
-      gender,
-      bloodGroup,
-      bloodDonationEnable,
-      email,
-      phoneNo,
-      linkedinProfileUrl,
-      facebookProfileUrl,
-      status,
-      currentJobTitle,
-      currentOrganization,
-      registrationNo,
-      interests,
-      expertin,
-      profilePicture,
-    } = req.body;
-
-    let imageData;
-
-    if (req.file) {
-      imageData = await uploadSingleImage(req.file);
-    } else if (profilePicture !== "null") {
-      imageData = profilePicture;
-    } else if (profilePicture === "null") {
-      imageData = null;
-    }
+    const { name, email } = req.body;
 
     if (userId === req.user.id) {
       const userUpdate = await User.findByIdAndUpdate(
         userId,
         {
-          firstName,
-          lastName,
-          rollNo,
-          batch,
-          departmentLong,
-          departmentShort,
-          homeDistrict,
-          presentDistrict,
-          currentlyLiveIn,
-          gender,
-          bloodGroup,
-          bloodDonationEnable,
+          name,
           email,
-          phoneNo,
-          linkedinProfileUrl,
-          facebookProfileUrl,
-          status,
-          currentJobTitle,
-          currentOrganization,
-          registrationNo,
-          interests: interests?.split(",").map((item) => item.trim()),
-          expertin: expertin?.split(",").map((item) => item.trim()),
-          profilePicture: imageData,
         },
         { new: true }
       ).select("-password -__v");
-
       res
         .status(201)
         .json({ message: "User update successful", userUpdate: userUpdate });
@@ -535,6 +490,130 @@ const createSellRequest = async (req, res, next) => {
   }
 };
 
+/*
+  @api:       POST /api/users/changePassword/
+  @desc:      change Password
+  @access:    private
+*/
+const changePassword = async (req, res, next) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user.id);
+
+    if (user) {
+      result = await bcrypt.compare(oldPassword, user.password);
+
+      if (result) {
+        await user.updateOne({
+          password: encriptPassword(newPassword),
+        });
+
+        res.status(201).json({
+          message: "Password changed successful.",
+        });
+      } else {
+        const error = createError(401, "Old Password does not match.");
+        next(error);
+      }
+    } else {
+      const error = createError(404, "User not found");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Password change failed.");
+    next(error);
+  }
+};
+
+/*
+  @api:       POST /api/users/resetPasswordLink/
+  @desc:      Reset Password
+  @access:    public
+*/
+const resetPasswordLink = async (req, res, next) => {
+  try {
+    const { phone } = req.body;
+    const user = await User.findOne({ phone });
+
+    if (user) {
+      const resetToken = uuidv4();
+
+      await User.findOneAndUpdate(user._id, {
+        resetToken,
+        resetTokenExpiry: addMinutes(new Date(), 15), // 15 min from now //
+      });
+
+      const verificationLink = `${process.env.FRONT_END_URL}/manage-password/set-new?user=${user._id}&resetToken=${resetToken}`;
+
+      const mailBody = `<html><body><h2>Reset your password </h2><p>Click on the below link to reset your password</p><a href=${verificationLink} target="_blank">Reset Password</a><br/><br/><p>If you face any difficulties or need any assistance please contact us at <a href="mailto:kuetianshub@gmail.com">kuetianshub@gmail.com</a></p></body></html>`;
+
+      const mailSendResponse = await sendMailToUser(
+        user.email,
+        mailBody,
+        "Reset your password"
+      );
+
+      if (mailSendResponse.messageId) {
+        res.status(200).json({
+          message: "Password reset link sent successfully",
+          mailTo: user.email,
+        });
+      } else {
+        const error = createError(500, "Password reset link sent failed.");
+        next(error);
+      }
+    } else {
+      const error = createError(500, "User not found with this email");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Password reset link sent failed.");
+    next(error);
+  }
+};
+
+/*
+  @api:       POST /api/users/setNewPassword/
+  @desc:      Set new Password
+  @access:    public
+*/
+const setNewPassword = async (req, res, next) => {
+  try {
+    const { newPassword, userId, resetToken } = req.body;
+    const user = await User.findById(userId);
+
+    if (user) {
+      if (
+        user.resetToken === resetToken &&
+        user.resetTokenExpiry > new Date()
+      ) {
+        await user.updateOne({
+          password: encriptPassword(newPassword),
+          resetToken: null,
+          resetTokenExpiry: null,
+        });
+
+        res.status(201).json({
+          message: "Password changed successfully",
+        });
+      } else {
+        const error = createError(
+          401,
+          "Your password reset link is invalid or got expired."
+        );
+        next(error);
+      }
+    } else {
+      const error = createError(500, "User not found.");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Password change failed.");
+    next(error);
+  }
+};
+
 // Helper Functions //
 
 const generateToken = (id) => {
@@ -546,6 +625,11 @@ const encriptPassword = (password) => {
   return bcrypt.hashSync(password, saltRounds);
 };
 
+const addMinutes = (date, minutes) => {
+  date.setMinutes(date.getMinutes() + minutes);
+  return date;
+};
+
 // Exports //
 
 module.exports = {
@@ -554,9 +638,9 @@ module.exports = {
   getUserProfileById,
   updateUserProfile,
   addFavoriteItem,
-  //   changePassword,
-  //   resetPasswordLink,
-  //   setNewPassword,
+  changePassword,
+  resetPasswordLink,
+  setNewPassword,
   getAllPortfolioByUser,
   createNewPortfolio,
   getPortfolioDetailsById,

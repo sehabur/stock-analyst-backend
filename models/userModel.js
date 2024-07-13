@@ -38,6 +38,13 @@ const userSchema = mongoose.Schema(
     premiumExpireDate: {
       type: Date,
     },
+    isFreeTrialUsed: {
+      type: Boolean,
+      default: false,
+    },
+    lastOtp: {
+      type: Number,
+    },
     resetToken: {
       type: String,
     },

@@ -22,18 +22,21 @@ const {
   registerValidationMiddleware,
 } = require("../middlewares/validationMiddlewares/registerValidationMiddleware");
 
-router.route("/portfolio").get(getAllPortfolioByUser).post(createNewPortfolio);
+router
+  .route("/portfolio")
+  .get(checkLogin, getAllPortfolioByUser)
+  .post(checkLogin, createNewPortfolio);
 
 router
   .route("/portfolio/:id")
   .get(getPortfolioDetailsById)
-  .delete(deletePortfolio);
+  .delete(checkLogin, deletePortfolio);
 
-router.route("/trade/buy").patch(createBuyRequest);
+router.route("/trade/buy").patch(checkLogin, createBuyRequest);
 
-router.route("/trade/sell").patch(createSellRequest);
+router.route("/trade/sell").patch(checkLogin, createSellRequest);
 
-router.patch("/favorite", addFavoriteItem);
+router.patch("/favorite", checkLogin, addFavoriteItem);
 
 router.post("/signin", signin);
 
@@ -41,7 +44,7 @@ router.post("/signup", registerValidationMiddleware, signup);
 
 router
   .route("/profile/:id")
-  .get(checkLogin, getUserProfileById)
+  .get(getUserProfileById)
   .patch(checkLogin, updateUserProfile);
 
 module.exports = router;

@@ -1,5 +1,7 @@
 const express = require("express");
+
 const axios = require("axios");
+
 const {
   getAllStocks,
   getStocksList,
@@ -22,8 +24,11 @@ const {
   pytest,
   getSymbolTvchart,
   getBarsTvchart,
+  marketDepth,
   newtest,
 } = require("../controllers/priceController");
+
+const { sendMailToUser } = require("../helper/mailer");
 
 const router = express.Router();
 
@@ -67,13 +72,15 @@ router.route("/getSymbolTvchart").get(getSymbolTvchart);
 
 router.route("/getBarsTvchart").get(getBarsTvchart);
 
+router.route("/marketDepth").get(marketDepth);
+
 // Test functions //
 router.route("/pytest").get(pytest);
 
 router.route("/newtest").get(newtest);
 
-router.route("/test").post(async () => {
-  await axios.request({
+router.route("/test").post(async (req, res) => {
+  const data = await axios.request({
     method: "post",
     url: "https://www.dsebd.org/ajax/load-instrument.php",
     headers: {
@@ -82,9 +89,11 @@ router.route("/test").post(async () => {
       "X-Requested-With": "XMLHttpRequest",
     },
     data: {
-      inst: "INTRACO",
+      inst: "MALEKSPIN",
     },
   });
+  console.log(data.data);
+  res.send(data.data);
 });
 
 module.exports = router;

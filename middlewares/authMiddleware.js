@@ -40,13 +40,11 @@ const checkPremium = async (req, res, next) => {
   try {
     const user = req.user;
     console.log(user);
-    if (user.isPremium) {
+    if (user?.isPremium) {
       return next();
     } else {
-      return next({
-        status: 401,
-        message: "Improper access",
-      });
+      const error = createError(401, "Access denied");
+      return next(error);
     }
   } catch (err) {
     const error = createError(401, err.message);
@@ -54,17 +52,24 @@ const checkPremium = async (req, res, next) => {
   }
 };
 
-// const checkAdmin = async (req, res, next) => {
-//   if (req?.user?.isAdmin) {
-//     next();
-//   } else {
-//     const error = createError(401, 'User do not have admin access');
-//     next(error);
-//   }
-// };
+const checkAdmin = async (req, res, next) => {
+  try {
+    const user = req.user;
+    console.log(user);
+    if (user?.isPremium) {
+      return next();
+    } else {
+      const error = createError(401, "Access denied");
+      return next(error);
+    }
+  } catch (err) {
+    const error = createError(401, err.message);
+    return next(error);
+  }
+};
 
 module.exports = {
   checkLogin,
   checkPremium,
-  // checkAdmin,
+  checkAdmin,
 };

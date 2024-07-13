@@ -1,6 +1,10 @@
 const url = require("url");
 const { DateTime } = require("luxon");
 const createError = require("http-errors");
+const axios = require("axios");
+
+const { JSDOM } = require("jsdom");
+
 const MinutePrice = require("../models/minutePriceModel");
 const Fundamental = require("../models/fundamentalModel");
 const DailyPrice = require("../models/dailyPriceModel");
@@ -52,16 +56,16 @@ const getSymbolTvchart = async (req, res) => {
         stocks: data,
         index: [
           {
-            code: "00DSEX",
-            name: "DHAKA STOCK EXCHANGE INDEX (DSEX)",
+            code: "DSEX",
+            name: "DHAKA STOCK EXCHANGE INDEX",
           },
           {
-            code: "00DSES",
-            name: "DHAKA STOCK EXCHANGE SHARIAH INDEX (DSES)",
+            code: "DSES",
+            name: "DHAKA STOCK EXCHANGE SHARIAH INDEX",
           },
           {
-            code: "00DS30",
-            name: "DHAKA STOCK EXCHANGE 30 (DS30)",
+            code: "DS30",
+            name: "DHAKA STOCK EXCHANGE 30",
           },
         ],
         sectors: sectorList.map((item) => ({
@@ -79,7 +83,7 @@ const getSymbolTvchart = async (req, res) => {
 */
 const getBarsTvchart = async (req, res) => {
   try {
-    const { symbol, symbolType, resolutionType, fromTime, toTime, limit } =
+    let { symbol, symbolType, resolutionType, fromTime, toTime, limit } =
       url.parse(req.url, true).query;
 
     let dataTable;
@@ -88,6 +92,10 @@ const getBarsTvchart = async (req, res) => {
 
     if (resolutionType == "day" && symbolType != "sector") {
       dataTable = "daily_prices";
+
+      if (symbolType == "index") {
+        symbol = "00" + symbol;
+      }
 
       const priorDayCount = 14;
 
@@ -121,7 +129,7 @@ const getBarsTvchart = async (req, res) => {
       ]);
 
       if (new Date() < new Date(toTime * 1000)) {
-        console.log("first");
+        // console.log("first");
         const { dailyPriceUpdateDate } = await Setting.findOne().select(
           "dailyPriceUpdateDate"
         );
@@ -473,6 +481,13 @@ const latestPrice = async (req, res, next) => {
       },
     },
     {
+      $addFields: {
+        ltp: {
+          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        },
+      },
+    },
+    {
       $unionWith: {
         coll: "index_day_minute_values",
         pipeline: [
@@ -799,7 +814,6 @@ const sectorWiseLatestPrice = async (req, res, next) => {
       $project: {
         _id: 0,
         sector: "$_id",
-        pp: 1,
         uptrend: 1,
         downtrend: 1,
         neutral: 1,
@@ -939,6 +953,28 @@ const dailySectorPrice = async (req, res, next) => {
               date: {
                 $gt: dailySectorUpdateDate,
               },
+            },
+          },
+          {
+            $unionWith: {
+              coll: "inactive_stocks",
+              pipeline: [
+                {
+                  $addFields: {
+                    date: today_date,
+                    ltp: "$price",
+                    ycp: "$price",
+                    high: "$price",
+                    low: "$price",
+                    close: "$price",
+                    open: "$price",
+                    change: 0,
+                    trade: 0,
+                    value: 0,
+                    volume: 0,
+                  },
+                },
+              ],
             },
           },
           {
@@ -4080,13 +4116,12 @@ const screener = async (req, res, next) => {
 
   let filters = {};
 
-  let candlestick = null;
-
   for (key in body) {
     const value = body[key].split(";");
 
     const minvalue = value[0];
     const maxvalue = value[1];
+    const infoText = value[2];
 
     if (["sector", "category", "patterns", "candlestick"].includes(key)) {
       filters[key] = {};
@@ -4226,6 +4261,7 @@ const screener = async (req, res, next) => {
         sector: 1,
         ltp: 1,
         category: 1,
+        epsCurrent: 1,
         volume: "$latest_prices.volume",
         pricePercentChange: "$latest_prices.percentChange",
         pricePercentChangeOneWeek: {
@@ -4379,6 +4415,9 @@ const screener = async (req, res, next) => {
             2,
           ],
         },
+        navCurrent: "$screener.navQuarterly.value",
+        nocfpsCurrent: "$screener.nocfpsQuarterly.value",
+
         de: "$screener.de.value",
         ps: "$screener.ps.value",
         roe: "$screener.roe.value",
@@ -4781,6 +4820,45 @@ const topFinancials = async (req, res, next) => {
 };
 
 /*
+  @api:       GET /api/prices/marketDepth?inst={inst}
+  @desc:      get latest share prices for all shares
+  @access:    public
+*/
+const marketDepth = async (req, res) => {
+  const { inst } = url.parse(req.url, true).query;
+
+  const output = await axios.request({
+    method: "post",
+    url: "https://www.dsebd.org/ajax/load-instrument.php",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8:",
+      Host: "www.dsebd.org",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    data: {
+      inst: inst,
+    },
+  });
+
+  const dom = new JSDOM(output.data);
+
+  const document = dom.window.document;
+
+  const table = document.querySelectorAll(`table[cellspacing="1"]`);
+
+  const buyTds = table[0].querySelectorAll("td");
+  const sellTds = table[1].querySelectorAll("td");
+
+  const buy = buySellCounts(buyTds);
+  const sell = buySellCounts(sellTds);
+
+  const buyPercent =
+    (buy.totalVolume / (buy.totalVolume + sell.totalVolume)) * 100;
+
+  res.status(200).json({ buy, sell, buyPercent });
+};
+
+/*
   Not in use
 */
 
@@ -4957,6 +5035,34 @@ const newtest = async (req, res) => {
 /*
   Helper functions
 */
+
+const buySellCounts = (tds) => {
+  const tdArray = Array.from(tds);
+
+  const tdTexts = tdArray.slice(3).map((td) => Number(td.textContent));
+
+  const tdData = [];
+  for (let i = 0; i < tdTexts.length; i += 2) {
+    tdData.push(tdTexts.slice(i, i + 2));
+  }
+
+  let totalVolume = 0,
+    totalPrice = 0;
+
+  for (let item of tdData) {
+    totalVolume += item[1];
+    totalPrice += item[0] * item[1];
+  }
+
+  const avgPrice = Number((totalPrice / totalVolume).toFixed(2));
+
+  return {
+    data: tdData,
+    totalVolume,
+    avgPrice,
+  };
+};
+
 const formatCandleChartData = (data) => {
   let candle = [];
 
@@ -5010,6 +5116,7 @@ module.exports = {
   allGainerLoser,
   screener,
   topFinancials,
+  marketDepth,
   pytest,
   newtest,
 };
