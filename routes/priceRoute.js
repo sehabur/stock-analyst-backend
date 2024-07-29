@@ -9,13 +9,15 @@ const {
   latestPrice,
   indexMover,
   latestPricesBySearch,
-  sectorWiseLatestPrice,
+  sectorGainValueSummary,
+  sectorLatestPrice,
   dailySectorPrice,
   allStockBeta,
   stockDetails,
   indexDetails,
   technicals,
   allGainerLoser,
+  topGainerLoser,
   indexMinuteData,
   newsByStock,
   blocktrByStock,
@@ -25,10 +27,9 @@ const {
   getSymbolTvchart,
   getBarsTvchart,
   marketDepth,
+  marketDepthAllInst,
   newtest,
 } = require("../controllers/priceController");
-
-const { sendMailToUser } = require("../helper/mailer");
 
 const router = express.Router();
 
@@ -46,8 +47,9 @@ router.route("/ipo").get(getIpoList);
 
 router.route("/latestPricesBySearch").get(latestPricesBySearch);
 
-router.route("/sectorWiseLatestPrice").get(sectorWiseLatestPrice);
-
+// sector //
+router.route("/sectorGainValueSummary").get(sectorGainValueSummary);
+router.route("/sectorLatestPrice").get(sectorLatestPrice);
 router.route("/dailySectorPrice/:sectorTag").get(dailySectorPrice);
 
 router.route("/stock/:code").get(stockDetails);
@@ -60,7 +62,9 @@ router.route("/news/:code").get(newsByStock);
 
 router.route("/blockTr/:code").get(blocktrByStock);
 
+// Gainer
 router.route("/allGainerLoser").get(allGainerLoser);
+router.route("/topGainerLoser").get(topGainerLoser);
 
 router.route("/indexMinuteData").get(indexMinuteData);
 
@@ -74,11 +78,11 @@ router.route("/getBarsTvchart").get(getBarsTvchart);
 
 router.route("/marketDepth").get(marketDepth);
 
+router.route("/marketDepthAllInst").get(marketDepthAllInst);
+
 // Test functions //
 router.route("/pytest").get(pytest);
-
 router.route("/newtest").get(newtest);
-
 router.route("/test").post(async (req, res) => {
   const data = await axios.request({
     method: "post",

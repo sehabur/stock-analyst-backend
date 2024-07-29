@@ -44,11 +44,11 @@ const insertOldData = async (req, res, next) => {
   //   for (let k = 1; k < 13; k++) {
 
   let year = 2024;
-  let k = 5;
+  let month = 7;
   let newData = [];
 
-  for (let j = 19; j < 27; j++) {
-    const dateValue = `${year}-${k}-${j}`;
+  for (let j = 24; j < 25; j++) {
+    const dateValue = `${year}-${month}-${j}`;
     console.log("Start:", dateValue);
 
     const formData = new FormData();
@@ -87,8 +87,9 @@ const insertOldData = async (req, res, next) => {
       }
     }
   }
+  console.log(newData);
   let doc = await DailyPrice.create(newData);
-  console.log("** Success month ->", k);
+  console.log("** Success month ->", month);
   //   }
   // }
   res.json();
