@@ -3617,7 +3617,6 @@ const marketDepthAllInst = async (req, res) => {
     const inst = item.tradingCode;
 
     // console.log("start -> ", inst);
-
     const output = await axios.request({
       method: "post",
       url: "https://www.dsebd.org/ajax/load-instrument.php",
