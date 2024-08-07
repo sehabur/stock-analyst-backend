@@ -100,4 +100,17 @@ router.route("/test").post(async (req, res) => {
   res.send(data.data);
 });
 
+// test route for app
+router.route("/user1").get((req, res) => {
+  console.log("user");
+  const data = "User data 22";
+  res.json({ data });
+});
+
+router.route("/product1").get((req, res) => {
+  console.log("product");
+  const data = "Product data 28";
+  res.json({ data });
+});
+
 module.exports = router;
