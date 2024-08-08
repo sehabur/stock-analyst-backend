@@ -3775,29 +3775,43 @@ const marketDepth = async (req, res) => {
 
   const dom = new JSDOM(output.data);
 
-  const document = dom.window.document;
+  const document = dom.window?.document;
+
+  if (!document) {
+    return res
+      .status(500)
+      .json({ tradingCode: inst, message: "Error occured" });
+  }
 
   const table = document.querySelectorAll(`table[cellspacing="1"]`);
 
-  const buyTds = table[0].querySelectorAll("td");
-  const sellTds = table[1].querySelectorAll("td");
+  const buyTds = table[0]?.querySelectorAll("td");
+  const sellTds = table[1]?.querySelectorAll("td");
 
   const buy = buySellCounts(buyTds);
   const sell = buySellCounts(sellTds);
 
-  const buyPercent =
-    (buy.totalVolume / (buy.totalVolume + sell.totalVolume)) * 100;
+  let status, buyPercent;
 
-  let status = "none";
+  if (buy && sell) {
+    buyPercent = (buy.totalVolume / (buy.totalVolume + sell.totalVolume)) * 100;
 
-  if (buy.totalVolume == 0 && sell.totalVolume > 0) {
-    status = "sell";
+    if (buy.totalVolume == 0 && sell.totalVolume > 0) {
+      status = "sell";
+    } else if (buy.totalVolume > 0 && sell.totalVolume == 0) {
+      status = "buy";
+    } else {
+      status = "none";
+    }
+
+    return res
+      .status(200)
+      .json({ tradingCode: inst, buy, sell, buyPercent, status });
+  } else {
+    return res
+      .status(500)
+      .json({ tradingCode: inst, message: "Error occured" });
   }
-  if (buy.totalVolume > 0 && sell.totalVolume == 0) {
-    status = "buy";
-  }
-
-  res.status(200).json({ tradingCode: inst, buy, sell, buyPercent, status });
 };
 
 /*

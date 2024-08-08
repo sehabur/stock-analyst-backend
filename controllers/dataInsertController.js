@@ -4,228 +4,15 @@ const xlsx = require("xlsx");
 const DailyPrice = require("../models/dailyPriceModel");
 
 /*
-  @api:       GET /api/dataInsert/eps/
-  @desc:      insert eps quarterly data to collection 
+  @api:       GET /api/dataInsert/financeData
+  @desc:      insert financial yearly data to collection 
   @access:    public
 */
-const changeSector = async (req, res, next) => {
-  const code = [
-    "DELTALIFE",
-    "FAREASTLIF",
-    "MEGHNALIFE",
-    "NATLIFEINS",
-    "PRAGATILIF",
-    "PRIMELIFE",
-    "PROGRESLIF",
-    "SUNLIFEINS",
-    "POPULARLIF",
-    "RUPALILIFE",
-    "SANDHANINS",
-    "PADMALIFE",
-    "SONALILIFE",
-    "CLICL",
-    "TILIL",
-  ];
-
-  for (item of code) {
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: item.trim() },
-      { sector: "Life Insurance" }
-    );
-    // console.log(response);
-  }
-
-  res.send("updated");
-};
-
-const insertOldData = async (req, res, next) => {
-  // const year = 2013;
-  // for (let year = 2000; year > 1999; year--) {
-  //   for (let k = 1; k < 13; k++) {
-
-  let year = 2024;
-  let month = 7;
-  let newData = [];
-
-  for (let j = 24; j < 25; j++) {
-    const dateValue = `${year}-${month}-${j}`;
-    console.log("Start:", dateValue);
-
-    const formData = new FormData();
-    formData.append("date", dateValue);
-
-    const response = await fetch(
-      `https://www.amarstock.com/data/download/CSV`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-    const data = await response.text();
-
-    let array = data.split("\n");
-    array.shift();
-
-    for (let i = 0; i < array.length; i++) {
-      let values = array[i].split(",");
-
-      if (["00DS30", "00DSES", "00DSEX"].includes(values[1])) {
-        let yr = values[0].slice(0, 4).toString();
-        let mo = values[0].slice(4, 6).toString();
-        let day = values[0].slice(6).toString();
-
-        newData.push({
-          date: new Date(yr + "-" + mo + "-" + day),
-          tradingCode: values[1],
-          open: Number(values[2]),
-          high: Number(values[3]),
-          low: Number(values[4]),
-          close: Number(values[5]),
-          ltp: Number(values[5]),
-          volume: Number(values[6]),
-        });
-      }
-    }
-  }
-  console.log(newData);
-  let doc = await DailyPrice.create(newData);
-  console.log("** Success month ->", month);
-  //   }
-  // }
-  res.json();
-};
-
-/*
-  @api:       GET /api/dataInsert/eps/
-  @desc:      insert eps quarterly data to collection 
-  @access:    public
-*/
-const insertFloorPrice = async (req, res, next) => {
-  const newWorkbook = xlsx.readFile(
-    "E:/MERN_APP/stock-analyst-bd/data/floor_price_list.xlsx"
-  );
-
-  var xlData = xlsx.utils.sheet_to_json(newWorkbook.Sheets["Sheet1"]);
-
-  for (data of xlData) {
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: data.code.trim() },
-      { floorPrice: data.price }
-    );
-    // console.log(response);
-  }
-
-  res.send("Floor price updated");
-};
-
-/*
-  @api:       GET /api/dataInsert/eps/
-  @desc:      insert eps quarterly data to collection 
-  @access:    public
-*/
-const insertEps = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["eps"]);
-
-  for (data of xlData) {
-    const insertData = {
-      year: "2022",
-      q1: data["Q1-2022"],
-      q2: data["Q2-2022"],
-      q3: data["Q3-2022"],
-      q4: data["Q4-2022"],
-      annual: data["annual-2022"],
-    };
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: data.tradingCode },
-      { $push: { epsQuaterly: insertData } }
-    );
-  }
-
-  res.send(xlData);
-};
-/*
-  @api:       GET /api/dataInsert/about/
-  @desc:      insert about section
-  @access:    public
-*/
-const insertAbout = async (req, res, next) => {
-  const workbook = xlsx.readFile(
-    "E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx"
-  );
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["about"]);
-
-  for (data of xlData) {
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: data.tradingCode },
-      { about: data.about }
-    );
-  }
-
-  res.send(xlData);
-};
-
-const insertNav = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["nav"]);
-
-  for (data of xlData) {
-    const insertData = [
-      {
-        year: "2022",
-        q1: data["Q1-2022"],
-        q2: data["Q2-2022"],
-        q3: data["Q3-2022"],
-        q4: data["Q4-2022"],
-      },
-      {
-        year: "2023",
-        q1: data["Q1-2023"],
-        q2: data["Q2-2023"],
-        q3: data["Q3-2023"],
-      },
-    ];
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: data.tradingCode },
-      { navQuaterly: insertData }
-    );
-  }
-
-  res.send(xlData);
-};
-
-const insertNocfps = async (req, res, next) => {
-  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["npcfps"]);
-
-  for (data of xlData) {
-    const insertData = [
-      // {
-      //   year: '2022',
-      //   q1: data['Q1-2022'],
-      //   q2: data['Q2-2022'],
-      //   q3: data['Q3-2022'],
-      //   q4: data['Q4-2022'],
-      // },
-      {
-        year: "2023",
-        q1: data["Q1-2023"],
-        q2: data["Q2-2023"],
-        q3: data["Q3-2023"],
-        q4: data["Q4-2023"],
-      },
-    ];
-    const response = await Fundamental.findOneAndUpdate(
-      { tradingCode: data.tradingCode },
-      { nocfpsQuaterly: insertData }
-    );
-  }
-
-  res.send(xlData);
-};
-
 const insertFinanceData = async (req, res, next) => {
   const workbook = xlsx.readFile(
-    "E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx"
+    "C:/MyPC_main/APPS/MERN Apps/stock-analyst-bd/data/fundamental_upload_7aug.xlsx"
   );
-  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["fin"]);
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["7_aug_2024"]);
 
   const datamap = [
     { text: "Total Asset", value: "totalAsset" },
@@ -408,15 +195,236 @@ const insertFinanceData = async (req, res, next) => {
     dataPush.push(data);
   }
 
-  // res.json(dataPush);
-
   for (item of dataPush) {
     const tradingCode = item.tradingCode;
     console.log(tradingCode);
-    await Fundamental.findOneAndUpdate({ tradingCode }, item.values);
+    await Fundamental.findOneAndUpdate({ tradingCode }, { $set: item.values });
   }
 
   res.json(dataPush);
+};
+
+/*
+  @api:       GET /api/dataInsert/eps/
+  @desc:      insert eps quarterly data to collection 
+  @access:    public
+*/
+const changeSector = async (req, res, next) => {
+  const code = [
+    "DELTALIFE",
+    "FAREASTLIF",
+    "MEGHNALIFE",
+    "NATLIFEINS",
+    "PRAGATILIF",
+    "PRIMELIFE",
+    "PROGRESLIF",
+    "SUNLIFEINS",
+    "POPULARLIF",
+    "RUPALILIFE",
+    "SANDHANINS",
+    "PADMALIFE",
+    "SONALILIFE",
+    "CLICL",
+    "TILIL",
+  ];
+
+  for (item of code) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: item.trim() },
+      { sector: "Life Insurance" }
+    );
+    // console.log(response);
+  }
+
+  res.send("updated");
+};
+
+/*
+  @api:       GET /api/dataInsert/oldData
+  @desc:      insert old ohlcv data of stock and index to collection 
+  @access:    public
+*/
+const insertOldData = async (req, res, next) => {
+  // const year = 2013;
+  // for (let year = 2000; year > 1999; year--) {
+  //   for (let k = 1; k < 13; k++) {
+
+  let year = 2024;
+  let month = 7;
+  let newData = [];
+
+  for (let j = 24; j < 25; j++) {
+    const dateValue = `${year}-${month}-${j}`;
+    console.log("Start:", dateValue);
+
+    const formData = new FormData();
+    formData.append("date", dateValue);
+
+    const response = await fetch(
+      `https://www.amarstock.com/data/download/CSV`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+    const data = await response.text();
+
+    let array = data.split("\n");
+    array.shift();
+
+    for (let i = 0; i < array.length; i++) {
+      let values = array[i].split(",");
+
+      if (["00DS30", "00DSES", "00DSEX"].includes(values[1])) {
+        let yr = values[0].slice(0, 4).toString();
+        let mo = values[0].slice(4, 6).toString();
+        let day = values[0].slice(6).toString();
+
+        newData.push({
+          date: new Date(yr + "-" + mo + "-" + day),
+          tradingCode: values[1],
+          open: Number(values[2]),
+          high: Number(values[3]),
+          low: Number(values[4]),
+          close: Number(values[5]),
+          ltp: Number(values[5]),
+          volume: Number(values[6]),
+        });
+      }
+    }
+  }
+  console.log(newData);
+  let doc = await DailyPrice.create(newData);
+  console.log("** Success month ->", month);
+  //   }
+  // }
+  res.json();
+};
+
+/*
+  @api:       GET /api/dataInsert/eps/
+  @desc:      insert eps quarterly data to collection 
+  @access:    public
+*/
+const insertFloorPrice = async (req, res, next) => {
+  const newWorkbook = xlsx.readFile(
+    "E:/MERN_APP/stock-analyst-bd/data/floor_price_list.xlsx"
+  );
+
+  var xlData = xlsx.utils.sheet_to_json(newWorkbook.Sheets["Sheet1"]);
+
+  for (data of xlData) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.code.trim() },
+      { floorPrice: data.price }
+    );
+    // console.log(response);
+  }
+
+  res.send("Floor price updated");
+};
+
+/*
+  @api:       GET /api/dataInsert/eps/
+  @desc:      insert eps quarterly data to collection 
+  @access:    public
+*/
+const insertEps = async (req, res, next) => {
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["eps"]);
+
+  for (data of xlData) {
+    const insertData = {
+      year: "2022",
+      q1: data["Q1-2022"],
+      q2: data["Q2-2022"],
+      q3: data["Q3-2022"],
+      q4: data["Q4-2022"],
+      annual: data["annual-2022"],
+    };
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.tradingCode },
+      { $push: { epsQuaterly: insertData } }
+    );
+  }
+
+  res.send(xlData);
+};
+/*
+  @api:       GET /api/dataInsert/about/
+  @desc:      insert about section
+  @access:    public
+*/
+const insertAbout = async (req, res, next) => {
+  const workbook = xlsx.readFile(
+    "E:/MERN_APP/stock-analyst-bd/data/eps_nav_upload.xlsx"
+  );
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["about"]);
+
+  for (data of xlData) {
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.tradingCode },
+      { about: data.about }
+    );
+  }
+
+  res.send(xlData);
+};
+
+const insertNav = async (req, res, next) => {
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["nav"]);
+
+  for (data of xlData) {
+    const insertData = [
+      {
+        year: "2022",
+        q1: data["Q1-2022"],
+        q2: data["Q2-2022"],
+        q3: data["Q3-2022"],
+        q4: data["Q4-2022"],
+      },
+      {
+        year: "2023",
+        q1: data["Q1-2023"],
+        q2: data["Q2-2023"],
+        q3: data["Q3-2023"],
+      },
+    ];
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.tradingCode },
+      { navQuaterly: insertData }
+    );
+  }
+
+  res.send(xlData);
+};
+
+const insertNocfps = async (req, res, next) => {
+  var xlData = xlsx.utils.sheet_to_json(workbook.Sheets["npcfps"]);
+
+  for (data of xlData) {
+    const insertData = [
+      // {
+      //   year: '2022',
+      //   q1: data['Q1-2022'],
+      //   q2: data['Q2-2022'],
+      //   q3: data['Q3-2022'],
+      //   q4: data['Q4-2022'],
+      // },
+      {
+        year: "2023",
+        q1: data["Q1-2023"],
+        q2: data["Q2-2023"],
+        q3: data["Q3-2023"],
+        q4: data["Q4-2023"],
+      },
+    ];
+    const response = await Fundamental.findOneAndUpdate(
+      { tradingCode: data.tradingCode },
+      { nocfpsQuaterly: insertData }
+    );
+  }
+
+  res.send(xlData);
 };
 
 module.exports = {
