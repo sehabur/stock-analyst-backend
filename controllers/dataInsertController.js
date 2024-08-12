@@ -10,9 +10,9 @@ const DailyPrice = require("../models/dailyPriceModel");
 */
 const insertFinanceData = async (req, res, next) => {
   const workbook = xlsx.readFile(
-    "C:/MyPC_main/APPS/MERN Apps/stock-analyst-bd/data/fundamental_upload_7aug.xlsx"
+    "C:/MyPC_main/APPS/MERN Apps/stock-analyst-bd/data/fundamental_upload.xlsx"
   );
-  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["7_aug_2024"]);
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["13_aug_2024"]);
 
   const datamap = [
     { text: "Total Asset", value: "totalAsset" },

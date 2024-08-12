@@ -61,8 +61,6 @@ function calculateRsi(prices, period = 14) {
     avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
     rs = avgGain / avgLoss;
     rsi.push(100 - 100 / (1 + rs));
-
-    console.log(typeof rs, rs);
   }
 
   return rsi;

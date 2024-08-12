@@ -985,6 +985,14 @@ const sectorGainValueSummary = async (req, res, next) => {
             },
           },
         },
+        valueTotal: {
+          $sum: "$value",
+        },
+      },
+    },
+    {
+      $sort: {
+        uptrend: -1,
       },
     },
     {
@@ -999,6 +1007,7 @@ const sectorGainValueSummary = async (req, res, next) => {
         valueCategoryB: { $round: ["$valueCategoryB", 2] },
         valueCategoryN: { $round: ["$valueCategoryN", 2] },
         valueCategoryZ: { $round: ["$valueCategoryZ", 2] },
+        valueTotal: 1,
       },
     },
   ]);
@@ -1446,15 +1455,28 @@ const technicals = async (req, res, next) => {
         high: 1,
         low: 1,
         ltp: 1,
+        ycp: 1,
         volume: 1,
       },
     },
   ]);
 
-  const prices = dailyPrice.map((item) => item.ltp);
-  const lows = dailyPrice.map((item) => item.low);
-  const highs = dailyPrice.map((item) => item.high);
-  const volumes = dailyPrice.map((item) => item.volume);
+  // const prices = dailyPrice.map((item) => item.ltp);
+  // const lows = dailyPrice.map((item) => item.low);
+  // const highs = dailyPrice.map((item) => item.high);
+  // const volumes = dailyPrice.map((item) => item.volume);
+
+  let prices = [];
+  let lows = [];
+  let highs = [];
+  let volumes = [];
+
+  for (let item of dailyPrice) {
+    prices.push(item.ltp !== 0 ? item.ltp : item.ycp);
+    lows.push(item.low !== 0 ? item.low : item.ycp);
+    highs.push(item.high !== 0 ? item.high : item.ycp);
+    volumes.push(item.volume);
+  }
 
   const sma10 = calculateSmaLastValue(prices, 10);
   const sma20 = calculateSmaLastValue(prices, 20);
