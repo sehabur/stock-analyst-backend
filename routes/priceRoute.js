@@ -52,6 +52,10 @@ router.route("/sectorGainValueSummary").get(sectorGainValueSummary);
 router.route("/sectorLatestPrice").get(sectorLatestPrice);
 router.route("/dailySectorPrice/:sectorTag").get(dailySectorPrice);
 
+// for trading view library //
+router.route("/getSymbolTvchart").get(getSymbolTvchart);
+router.route("/getBarsTvchart").get(getBarsTvchart);
+
 router.route("/stock/:code").get(stockDetails);
 
 router.route("/index/:code").get(indexDetails);
@@ -71,10 +75,6 @@ router.route("/indexMinuteData").get(indexMinuteData);
 router.route("/screener").post(screener);
 
 router.route("/topFinancials").get(topFinancials);
-
-router.route("/getSymbolTvchart").get(getSymbolTvchart);
-
-router.route("/getBarsTvchart").get(getBarsTvchart);
 
 router.route("/marketDepth").get(marketDepth);
 

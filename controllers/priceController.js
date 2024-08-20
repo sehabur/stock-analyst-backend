@@ -22,7 +22,8 @@ const HaltStatus = require("../models/haltStatusModel");
 
 const {
   sectorList,
-  circuitMoveRange,
+  circuitUpMoveRange,
+  circuitDownMoveRange,
   ds30Shares,
   dsexShares,
 } = require("../data/dse");
@@ -1157,6 +1158,15 @@ const dailySectorPrice = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "minute_prices",
+        pipeline: [
+          {
+            $addFields: {
+              ltp: {
+                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              },
+            },
+          },
+        ],
       },
     },
     { $unwind: "$minute_prices" },
@@ -1552,7 +1562,14 @@ const stockDetails = async (req, res, next) => {
     {
       $match: {
         tradingCode,
-        ltp: { $ne: 0 },
+        // ltp: { $ne: 0 },
+      },
+    },
+    {
+      $addFields: {
+        ltp: {
+          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        },
       },
     },
     {
@@ -1640,7 +1657,13 @@ const stockDetails = async (req, res, next) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
-              ltp: { $ne: 0 },
+            },
+          },
+          {
+            $addFields: {
+              ltp: {
+                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              },
             },
           },
           {
@@ -1856,12 +1879,17 @@ const stockDetails = async (req, res, next) => {
   const ltp = latestPrice.ltp;
   const ycp = latestPrice.ycp;
 
-  const circuitRange = circuitMoveRange.find(
-    (item) => ycp > item.min && ycp < item.max
+  const circuitUpRange = circuitUpMoveRange.find(
+    (item) => ycp >= item.min && ycp <= item.max
   ).value;
 
-  const circuitUp = Math.floor((ycp + (ycp * circuitRange) / 100) * 10) / 10;
-  const circuitLow = Math.ceil((ycp - (ycp * circuitRange) / 100) * 10) / 10;
+  const circuitDownRange = circuitDownMoveRange.find(
+    (item) => ycp >= item.min && ycp <= item.max
+  ).value;
+
+  const circuitUp = Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
+  const circuitLow =
+    Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
 
   const sectorRatio = await Fundamental.aggregate([
     {
@@ -3849,7 +3877,7 @@ const marketDepthAllInst = async (req, res) => {
   for (let item of allStocks) {
     const inst = item.tradingCode;
 
-    console.log("start -> ", inst);
+    // console.log("start -> ", inst);
 
     const output = await axios.request({
       method: "post",
@@ -3881,17 +3909,46 @@ const marketDepthAllInst = async (req, res) => {
     const buy = buySellCounts(buyTds);
     const sell = buySellCounts(sellTds);
 
-    let status = "none";
+    let initMarketDepthStatus = "none";
 
     if (buy && sell) {
       if (buy.totalVolume == 0 && sell.totalVolume > 0) {
-        status = "sell";
+        initMarketDepthStatus = "sell";
       } else if (buy.totalVolume > 0 && sell.totalVolume == 0) {
-        status = "buy";
+        initMarketDepthStatus = "buy";
       } else {
-        status = "none";
+        initMarketDepthStatus = "none";
       }
     }
+
+    const latestPrice = await LatestPrice.findOne({ tradingCode: inst });
+
+    const price = latestPrice.ltp;
+
+    const ycp = latestPrice.ycp;
+
+    const circuitUpRange = circuitUpMoveRange.find(
+      (item) => ycp >= item.min && ycp <= item.max
+    ).value;
+
+    const circuitDownRange = circuitDownMoveRange.find(
+      (item) => ycp >= item.min && ycp <= item.max
+    ).value;
+
+    const circuitUpPrice =
+      Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
+    const circuitDownPrice =
+      Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
+
+    let circuitLimitReached = false;
+
+    if (latestPrice.change > 0) {
+      circuitLimitReached = circuitUpPrice == price ? true : false;
+    } else if (latestPrice.change < 0) {
+      circuitLimitReached = circuitDownPrice == price ? true : false;
+    }
+
+    let status = circuitLimitReached ? initMarketDepthStatus : "none";
 
     await HaltStatus.findOneAndUpdate(
       { tradingCode: inst },
@@ -3905,7 +3962,11 @@ const marketDepthAllInst = async (req, res) => {
             .setZone("Etc/GMT")
             .set({ second: 0, millisecond: 0 })
             .toISO(),
-          status: status,
+          initMarketDepthStatus,
+          circuitLimitReached,
+          totalBuyVolume: buy?.totalVolume,
+          totalSellVolume: sell?.totalVolume,
+          status,
         },
       },
       { upsert: true }
@@ -3913,7 +3974,6 @@ const marketDepthAllInst = async (req, res) => {
 
     result.push(inst);
   }
-
   res.status(200).json({ response: "success", items: result });
 };
 

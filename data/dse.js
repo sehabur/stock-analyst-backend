@@ -26,7 +26,7 @@ const sectorList = [
 
 const categoryList = ["A", "B", "N", "Z", "SME"];
 
-const circuitMoveRange = [
+const circuitUpMoveRange = [
   { min: 1, max: 200, value: 10 },
   { min: 201, max: 500, value: 8.75 },
   { min: 501, max: 1000, value: 7.5 },
@@ -34,6 +34,8 @@ const circuitMoveRange = [
   { min: 2001, max: 5000, value: 5 },
   { min: 5001, max: 20000, value: 3.75 },
 ];
+
+const circuitDownMoveRange = [{ min: 1, max: 20000, value: 3 }];
 
 const inactiveStocks = [
   "UNITEDAIR",
@@ -374,7 +376,8 @@ const dsexShares = [
 module.exports = {
   sectorList,
   categoryList,
-  circuitMoveRange,
+  circuitUpMoveRange,
+  circuitDownMoveRange,
   ds30Shares,
   dsexShares,
 };

@@ -70,7 +70,7 @@ const signin = async (req, res, next) => {
       },
     });
   } catch (err) {
-    const error = createError(500, "Login failed. Unknown Error");
+    const error = createError(500, "Unknown Error");
     next(error);
   }
 };
