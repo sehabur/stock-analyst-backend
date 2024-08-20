@@ -994,6 +994,7 @@ const sectorGainValueSummary = async (req, res, next) => {
     {
       $sort: {
         uptrend: -1,
+        _id: 1,
       },
     },
     {
@@ -1562,19 +1563,16 @@ const stockDetails = async (req, res, next) => {
     {
       $match: {
         tradingCode,
-        // ltp: { $ne: 0 },
-      },
-    },
-    {
-      $addFields: {
-        ltp: {
-          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
-        },
       },
     },
     {
       $facet: {
         latest: [
+          {
+            $match: {
+              ltp: { $gt: 0 },
+            },
+          },
           {
             $sort: {
               time: 1,
@@ -1608,12 +1606,8 @@ const stockDetails = async (req, res, next) => {
           {
             $project: {
               time: 1,
-              close: 1,
               ltp: 1,
               ycp: 1,
-              value: 1,
-              volume: 1,
-              trade: 1,
             },
           },
         ],
@@ -1657,15 +1651,16 @@ const stockDetails = async (req, res, next) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
+              ltp: { $gt: 0 },
             },
           },
-          {
-            $addFields: {
-              ltp: {
-                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
-              },
-            },
-          },
+          // {
+          //   $addFields: {
+          //     ltp: {
+          //       $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+          //     },
+          //   },
+          // },
           {
             $sort: {
               time: 1,
@@ -2126,6 +2121,11 @@ const indexDetails = async (req, res, next) => {
     {
       $facet: {
         latest: [
+          {
+            $match: {
+              index: { $gt: 0 },
+            },
+          },
           {
             $sort: {
               time: 1,
