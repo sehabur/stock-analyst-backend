@@ -12,7 +12,7 @@ const insertFinanceData = async (req, res, next) => {
   const workbook = xlsx.readFile(
     "C:/MyPC_main/APPS/MERN Apps/stock-analyst-bd/data/fundamental_upload.xlsx"
   );
-  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["20_aug_2024"]);
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["Sheet1"]);
 
   const datamap = [
     { text: "Total Asset", value: "totalAsset" },
@@ -116,68 +116,54 @@ const insertFinanceData = async (req, res, next) => {
       roa.push({
         year: year,
         value: Number(
-          (
-            data.values.netIncome[i].value / data.values.totalAsset[i].value
-          ).toFixed(3)
+          data.values.netIncome[i].value / data.values.totalAsset[i].value
         ),
       });
       currentRatio.push({
         year: year,
         value: Number(
-          (
-            data.values.totalCurrentAsset[i].value /
+          data.values.totalCurrentAsset[i].value /
             data.values.totalCurrentLiabilities[i].value
-          ).toFixed(3)
         ),
       });
       netIncomeRatio.push({
         year: year,
         value: Number(
-          (
-            data.values.netIncome[i].value / data.values.revenue[i].value
-          ).toFixed(3)
+          data.values.netIncome[i].value / data.values.revenue[i].value
         ),
       });
       profitMargin.push({
         year: year,
         value: Number(
-          (
-            data.values.netIncome[i].value / data.values.revenue[i].value
-          ).toFixed(3)
+          data.values.netIncome[i].value / data.values.revenue[i].value
         ),
       });
       de.push({
         year: year,
         value: Number(
-          (
-            (data.values.totalNonCurrentLiabilities[i].value +
-              data.values.totalCurrentLiabilities[i].value) /
+          (data.values.totalNonCurrentLiabilities[i].value +
+            data.values.totalCurrentLiabilities[i].value) /
             (data.values.totalAsset[i].value -
               (data.values.totalNonCurrentLiabilities[i].value +
                 data.values.totalCurrentLiabilities[i].value))
-          ).toFixed(3)
         ),
       });
       roce.push({
         year: year,
 
         value: Number(
-          (
-            data.values.ebit[i].value /
+          data.values.ebit[i].value /
             (data.values.totalAsset[i].value -
               data.values.totalCurrentLiabilities[i].value)
-          ).toFixed(3)
         ),
       });
       roe.push({
         year: year,
         value: Number(
-          (
-            data.values.netIncome[i].value /
+          data.values.netIncome[i].value /
             (data.values.totalAsset[i].value -
               (data.values.totalNonCurrentLiabilities[i].value +
                 data.values.totalCurrentLiabilities[i].value))
-          ).toFixed(3)
         ),
       });
     }

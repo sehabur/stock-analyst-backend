@@ -744,6 +744,11 @@ const latestPrice = async (req, res, next) => {
         type: "sector",
       },
     },
+    {
+      $match: {
+        tradingCode: { $ne: null },
+      },
+    },
   ]);
 
   res.status(200).json([...latestPrice, ...sectorPrice]);
@@ -1608,6 +1613,9 @@ const stockDetails = async (req, res, next) => {
               time: 1,
               ltp: 1,
               ycp: 1,
+              value: 1,
+              volume: 1,
+              trade: 1,
             },
           },
         ],
@@ -3131,8 +3139,7 @@ const screener = async (req, res, next) => {
       if (maxvalue !== "null") filters[key]["$lte"] = Number(maxvalue);
     }
   }
-
-  console.log(filters);
+  // console.log(filters);
 
   const { minuteDataUpdateDate } = await Setting.findOne().select(
     "minuteDataUpdateDate"
@@ -3482,7 +3489,7 @@ const screener = async (req, res, next) => {
     },
   ]);
 
-  console.log(data);
+  // console.log(data);
 
   res.status(200).json(data);
 };
@@ -3803,68 +3810,6 @@ const topFinancials = async (req, res, next) => {
 };
 
 /*
-  @api:       GET /api/prices/marketDepth?inst={inst}
-  @desc:      get latest share prices for all shares
-  @access:    public
-*/
-const marketDepth = async (req, res) => {
-  const { inst } = url.parse(req.url, true).query;
-
-  const output = await axios.request({
-    method: "post",
-    url: "https://www.dsebd.org/ajax/load-instrument.php",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8:",
-      Host: "www.dsebd.org",
-      "X-Requested-With": "XMLHttpRequest",
-    },
-    data: {
-      inst: inst,
-    },
-  });
-
-  const dom = new JSDOM(output.data);
-
-  const document = dom.window?.document;
-
-  if (!document) {
-    return res
-      .status(500)
-      .json({ tradingCode: inst, message: "Error occured" });
-  }
-
-  const table = document.querySelectorAll(`table[cellspacing="1"]`);
-
-  const buyTds = table[0]?.querySelectorAll("td");
-  const sellTds = table[1]?.querySelectorAll("td");
-
-  const buy = buySellCounts(buyTds);
-  const sell = buySellCounts(sellTds);
-
-  let status, buyPercent;
-
-  if (buy && sell) {
-    buyPercent = (buy.totalVolume / (buy.totalVolume + sell.totalVolume)) * 100;
-
-    if (buy.totalVolume == 0 && sell.totalVolume > 0) {
-      status = "sell";
-    } else if (buy.totalVolume > 0 && sell.totalVolume == 0) {
-      status = "buy";
-    } else {
-      status = "none";
-    }
-
-    return res
-      .status(200)
-      .json({ tradingCode: inst, buy, sell, buyPercent, status });
-  } else {
-    return res
-      .status(500)
-      .json({ tradingCode: inst, message: "Error occured" });
-  }
-};
-
-/*
   @api:       GET /api/prices/marketDepthAllInst
   @desc:      get latest share prices for all shares
   @access:    public
@@ -3872,12 +3817,14 @@ const marketDepth = async (req, res) => {
 const marketDepthAllInst = async (req, res) => {
   const allStocks = await LatestPrice.find();
 
+  // const allStocks = [{ tradingCode: "ROBI" }];
+
   const result = [];
 
   for (let item of allStocks) {
     const inst = item.tradingCode;
 
-    // console.log("start -> ", inst);
+    console.log("start -> ", inst);
 
     const output = await axios.request({
       method: "post",
@@ -3941,6 +3888,8 @@ const marketDepthAllInst = async (req, res) => {
       Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
 
     let circuitLimitReached = false;
+
+    // console.log(ycp, circuitUpPrice, price, circuitDownPrice);
 
     if (latestPrice.change > 0) {
       circuitLimitReached = circuitUpPrice == price ? true : false;
@@ -4022,6 +3971,68 @@ const latestPricesBySearch = async (req, res, next) => {
     },
   ]);
   res.status(200).json(latestPrice);
+};
+
+/*
+  @api:       GET /api/prices/marketDepth?inst={inst}
+  @desc:      get latest share prices for all shares
+  @access:    public
+*/
+const marketDepth = async (req, res) => {
+  const { inst } = url.parse(req.url, true).query;
+
+  const output = await axios.request({
+    method: "post",
+    url: "https://www.dsebd.org/ajax/load-instrument.php",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8:",
+      Host: "www.dsebd.org",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    data: {
+      inst: inst,
+    },
+  });
+
+  const dom = new JSDOM(output.data);
+
+  const document = dom.window?.document;
+
+  if (!document) {
+    return res
+      .status(500)
+      .json({ tradingCode: inst, message: "Error occured" });
+  }
+
+  const table = document.querySelectorAll(`table[cellspacing="1"]`);
+
+  const buyTds = table[0]?.querySelectorAll("td");
+  const sellTds = table[1]?.querySelectorAll("td");
+
+  const buy = buySellCounts(buyTds);
+  const sell = buySellCounts(sellTds);
+
+  let status, buyPercent;
+
+  if (buy && sell) {
+    buyPercent = (buy.totalVolume / (buy.totalVolume + sell.totalVolume)) * 100;
+
+    if (buy.totalVolume == 0 && sell.totalVolume > 0) {
+      status = "sell";
+    } else if (buy.totalVolume > 0 && sell.totalVolume == 0) {
+      status = "buy";
+    } else {
+      status = "none";
+    }
+
+    return res
+      .status(200)
+      .json({ tradingCode: inst, buy, sell, buyPercent, status });
+  } else {
+    return res
+      .status(500)
+      .json({ tradingCode: inst, message: "Error occured" });
+  }
 };
 
 /*

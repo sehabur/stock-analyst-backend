@@ -10,6 +10,14 @@ const latestPriceSchema = mongoose.Schema(
       type: Number,
       required: true,
     },
+    ycp: {
+      type: Number,
+      required: true,
+    },
+    change: {
+      type: Number,
+      required: true,
+    },
     tradingCode: {
       type: String,
       required: true,
