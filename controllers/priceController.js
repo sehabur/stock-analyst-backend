@@ -2606,6 +2606,15 @@ const topGainerLoser = async (req, res, next) => {
     },
     { $unwind: "$halt_shares" },
     {
+      $addFields: {
+        category: "$fundamentals.category",
+        type: "$fundamentals.type",
+        sector: "$fundamentals.sector",
+        companyName: "$fundamentals.companyName",
+        haltStatus: "$halt_shares.status",
+      },
+    },
+    {
       $facet: {
         gainer: [
           {
@@ -2628,10 +2637,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2656,10 +2666,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2684,10 +2695,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2712,10 +2724,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2740,10 +2753,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2767,10 +2781,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2794,10 +2809,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -2821,10 +2837,11 @@ const topGainerLoser = async (req, res, next) => {
               volume: 1,
               value: 1,
               trade: 1,
-              category: "$fundamentals.category",
-              sector: "$fundamentals.sector",
-              companyName: "$fundamentals.companyName",
-              haltStatus: "$halt_shares.status",
+              category: 1,
+              type: 1,
+              sector: 1,
+              companyName: 1,
+              haltStatus: 1,
             },
           },
         ],
@@ -3142,6 +3159,7 @@ const allGainerLoser = async (req, res, next) => {
           ],
         },
         category: "$fundamentals.category",
+        type: "$fundamentals.type",
         sector: "$fundamentals.sector",
         haltStatus: "$halt_shares.status",
         id: "$_id",
@@ -3156,6 +3174,7 @@ const allGainerLoser = async (req, res, next) => {
         change: 1,
         percentChange: 1,
         category: 1,
+        type: 1,
         sector: 1,
         haltStatus: 1,
         day: {
@@ -3934,7 +3953,7 @@ const marketDepthAllInst = async (req, res) => {
   for (let item of allStocks) {
     const inst = item.tradingCode;
 
-    console.log("start -> ", inst);
+    // console.log("start -> ", inst);
 
     const output = await axios.request({
       method: "post",
@@ -3954,7 +3973,7 @@ const marketDepthAllInst = async (req, res) => {
     const document = dom.window?.document;
 
     if (!document) {
-      console.log("Error -> ", inst);
+      // console.log("Error -> ", inst);
       continue;
     }
 
