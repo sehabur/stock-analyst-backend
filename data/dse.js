@@ -35,7 +35,16 @@ const circuitUpMoveRange = [
   { min: 5001, max: 20000, value: 3.75 },
 ];
 
-const circuitDownMoveRange = [{ min: 1, max: 20000, value: 3 }];
+const circuitDownMoveRange = [
+  { min: 1, max: 200, value: 10 },
+  { min: 201, max: 500, value: 8.75 },
+  { min: 501, max: 1000, value: 7.5 },
+  { min: 1001, max: 2000, value: 6.25 },
+  { min: 2001, max: 5000, value: 5 },
+  { min: 5001, max: 20000, value: 3.75 },
+];
+
+// const circuitDownMoveRange = [{ min: 1, max: 20000, value: 3 }];
 
 const inactiveStocks = [
   "UNITEDAIR",

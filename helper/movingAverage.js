@@ -66,17 +66,17 @@ function calculateRsi(prices, period = 14) {
   return rsi;
 }
 
-function calculateStochasticK(prices, period = 14, smoothK = 3, smoothD = 3) {
-  if (prices.length < period) {
+function calculateStochasticK(data, period = 14, smoothK = 3, smoothD = 3) {
+  if (data.length < period) {
     return null;
   }
 
   let stochK = [];
-  for (let i = period - 1; i < prices.length; i++) {
-    let periodPrices = prices.slice(i - period + 1, i + 1);
-    let high = Math.max(...periodPrices);
-    let low = Math.min(...periodPrices);
-    let currentClose = prices[i];
+  for (let i = period - 1; i < data.length; i++) {
+    let periodPrices = data.slice(i - period + 1, i + 1);
+    let high = Math.max(...periodPrices.map((d) => d.high));
+    let low = Math.min(...periodPrices.map((d) => d.low));
+    let currentClose = data[i].close;
     let k = ((currentClose - low) / (high - low)) * 100;
     stochK.push(k);
   }
@@ -161,7 +161,7 @@ function calculateMacd(
   const longEMA = calculateEma(prices, longPeriod);
 
   const macdLine = shortEMA
-    .slice(longPeriod - 1)
+    .slice(longPeriod - shortPeriod)
     .map((short, index) => short - longEMA[index]);
 
   const signalLine = calculateEma(macdLine, signalPeriod);
@@ -341,28 +341,29 @@ function calculateRsiLastValue(prices, period = 14) {
 }
 
 function calculateStochasticKLastValue(
-  prices,
+  data,
   period = 14,
   smoothK = 3,
   smoothD = 3
 ) {
-  if (prices.length < period) {
+  if (data.length < period) {
     return null;
   }
 
   let stochK = [];
-  for (let i = period - 1; i < prices.length; i++) {
-    let periodPrices = prices.slice(i - period + 1, i + 1);
-    let high = Math.max(...periodPrices);
-    let low = Math.min(...periodPrices);
-    let currentClose = prices[i];
+  for (let i = period - 1; i < data.length; i++) {
+    let periodPrices = data.slice(i - period + 1, i + 1);
+    let high = Math.max(...periodPrices.map((d) => d.high));
+    let low = Math.min(...periodPrices.map((d) => d.low));
+    let currentClose = data[i].close;
     let k = ((currentClose - low) / (high - low)) * 100;
     stochK.push(k);
   }
 
-  const stochKLastValue = Number(stochK[stochK.length - 1].toFixed(2));
+  let slowK = calculateSma(stochK, smoothK);
+  // let slowD = calculateSma(slowK, smoothD);
 
-  return stochKLastValue;
+  return Number(slowK[slowK.length - 1].toFixed(2));
 }
 
 function calculateAdxLastValue(highs, lows, closes, period = 14) {
@@ -404,7 +405,7 @@ function calculateMacdLastValue(
   const longEMA = calculateEma(prices, longPeriod);
 
   const macdLine = shortEMA
-    .slice(longPeriod - 1)
+    .slice(longPeriod - shortPeriod)
     .map((short, index) => short - longEMA[index]);
 
   const validMACDLine = macdLine.slice(signalPeriod - 1);

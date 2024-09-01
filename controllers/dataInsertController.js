@@ -12,7 +12,7 @@ const insertFinanceData = async (req, res, next) => {
   const workbook = xlsx.readFile(
     "C:/MyPC_main/APPS/MERN Apps/stock-analyst-bd/data/fundamental_upload.xlsx"
   );
-  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["Sheet1"]);
+  const xlData = xlsx.utils.sheet_to_json(workbook.Sheets["20_aug_2024"]);
 
   const datamap = [
     { text: "Total Asset", value: "totalAsset" },

@@ -100,7 +100,7 @@ const signup = async (req, res, next) => {
       return next(error);
     }
 
-    const newUser = await User.create({
+    let newUser = await User.create({
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim(),
@@ -111,7 +111,12 @@ const signup = async (req, res, next) => {
 
     res.status(201).json({
       message: "Account creation successful",
-      user: newUser,
+      user: {
+        ...newUser._doc,
+        password: "",
+        token: generateToken(newUser._id),
+        isLoggedIn: true,
+      },
     });
   } catch (err) {
     const error = createError(500, "Something went wrong. Please try again");
@@ -150,11 +155,12 @@ const addFavoriteItem = async (req, res, next) => {
   try {
     const { tradingCode, type, userId } = req.body;
 
-    let message;
+    let message = null;
     if (type === "add") {
-      await User.findByIdAndUpdate(userId, {
+      const result = await User.findByIdAndUpdate(userId, {
         $push: { favorites: tradingCode },
       });
+      console.log(result);
       message = "Item added to favorites";
     } else if (type === "remove") {
       await User.findByIdAndUpdate(userId, {
@@ -165,7 +171,7 @@ const addFavoriteItem = async (req, res, next) => {
       await User.findByIdAndUpdate(userId, {
         favorites: tradingCode,
       });
-      message = "Multiple item added to favorites";
+      message = "Favorite items update successful";
     }
     res.status(200).json({ message });
   } catch (err) {

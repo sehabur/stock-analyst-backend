@@ -40,6 +40,7 @@ const {
   calculateWilliamsPercentRLastValue,
   calculateMoneyFlowIndexLastValue,
   calculatePivotPoints,
+  calculateStochasticK,
 } = require("../helper/movingAverage");
 
 const { pipeline } = require("stream");
@@ -734,13 +735,13 @@ const latestPrice = async (req, res, next) => {
     },
     {
       $addFields: {
-        tradingCode: "$sector",
         companyName: "$sector",
         sectorTag: {
           $toLower: {
             $arrayElemAt: [{ $split: ["$sector", " "] }, 0],
           },
         },
+        tradingCode: "$sector",
         type: "sector",
       },
     },
@@ -751,7 +752,7 @@ const latestPrice = async (req, res, next) => {
     },
   ]);
 
-  res.status(200).json([...latestPrice, ...sectorPrice]);
+  res.status(200).json([...sectorPrice, ...latestPrice]);
 };
 
 /*
@@ -1184,10 +1185,21 @@ const dailySectorPrice = async (req, res, next) => {
         high: { $avg: "$minute_prices.high" },
         low: { $avg: "$minute_prices.low" },
         close: { $avg: "$minute_prices.ltp" },
-        change: { $avg: "$minute_prices.change" },
+        // change: { $avg: "$minute_prices.change" },
         trade: { $sum: "$minute_prices.trade" },
         value: { $sum: "$minute_prices.value" },
         volume: { $sum: "$minute_prices.volume" },
+      },
+    },
+    {
+      $addFields: {
+        change: { $subtract: ["$ltp", "$ycp"] },
+        percentChange: {
+          $multiply: [
+            { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+            100,
+          ],
+        },
       },
     },
     {
@@ -1205,6 +1217,7 @@ const dailySectorPrice = async (req, res, next) => {
         low: { $round: ["$low", 2] },
         close: { $round: ["$close", 2] },
         change: { $round: ["$change", 2] },
+        percentChange: { $round: ["$percentChange", 2] },
         trade: 1,
         value: 1,
         volume: 1,
@@ -1433,7 +1446,11 @@ const dailySectorPrice = async (req, res, next) => {
     },
   ]);
 
-  res.status(200).json({ minute: minuteSector, ...dailySector[0] });
+  const latestSector = minuteSector[minuteSector.length - 1];
+
+  res
+    .status(200)
+    .json({ latest: latestSector, minute: minuteSector, ...dailySector[0] });
 };
 
 /*
@@ -1444,7 +1461,7 @@ const dailySectorPrice = async (req, res, next) => {
 const technicals = async (req, res, next) => {
   const tradingCode = req.params.code;
 
-  const queryLimit = 260; // default to 1 year //
+  const queryLimit = 500;
 
   const dailyPrice = await DailyPrice.aggregate([
     {
@@ -1486,12 +1503,18 @@ const technicals = async (req, res, next) => {
   let lows = [];
   let highs = [];
   let volumes = [];
+  let ohlc = [];
 
   for (let item of dailyPrice) {
     prices.push(item.ltp !== 0 ? item.ltp : item.ycp);
     lows.push(item.low !== 0 ? item.low : item.ycp);
     highs.push(item.high !== 0 ? item.high : item.ycp);
     volumes.push(item.volume);
+    ohlc.push({
+      close: item.ltp !== 0 ? item.ltp : item.ycp,
+      high: item.high !== 0 ? item.high : item.ycp,
+      low: item.low !== 0 ? item.low : item.ycp,
+    });
   }
 
   const sma10 = calculateSmaLastValue(prices, 10);
@@ -1509,13 +1532,13 @@ const technicals = async (req, res, next) => {
   const ema200 = calculateEmaLastValue(prices, 200);
 
   const rsi = calculateRsiLastValue(prices);
-  const stoch = calculateStochasticKLastValue(prices);
+  const stoch = calculateStochasticKLastValue(ohlc);
   const adx = calculateAdxLastValue(highs, lows, prices);
   const williamR = calculateWilliamsPercentRLastValue(highs, lows, prices);
   const mfi = calculateMoneyFlowIndexLastValue(highs, lows, prices, volumes);
   const macd = calculateMacdLastValue(prices);
 
-  const lastPrice = dailyPrice.slice(-1)[0];
+  const lastPrice = dailyPrice[dailyPrice.length - 1];
 
   const pivots = calculatePivotPoints(
     lastPrice.high,
@@ -1920,6 +1943,7 @@ const stockDetails = async (req, res, next) => {
             "$latest_prices.ycp",
           ],
         },
+        screenerBookValue: "$screener.bookValue.value",
       },
     },
     {
@@ -1945,7 +1969,14 @@ const stockDetails = async (req, res, next) => {
                 {
                   $multiply: ["$ltp", "$totalShares"],
                 },
-                "$screener.bookValue.value",
+                // "$screener.bookValue.value",
+                {
+                  $cond: [
+                    { $eq: ["$screener.bookValue.value", 0] },
+                    0.000001,
+                    "$screener.bookValue.value",
+                  ],
+                },
               ],
             },
             2,
@@ -2535,9 +2566,9 @@ const blocktrByStock = async (req, res, next) => {
     const { dailyBlockTrUpdateDate } = await Setting.findOne().select(
       "dailyBlockTrUpdateDate"
     );
-    blocktr = await BlockTr.find({ date: dailyBlockTrUpdateDate })
-      .sort({ value: -1 })
-      .limit(queryLimit);
+    blocktr = await BlockTr.find({ date: dailyBlockTrUpdateDate }).sort({
+      quantity: -1,
+    });
   } else {
     blocktr = await BlockTr.find({ tradingCode })
       .sort({ date: -1 })
@@ -2861,6 +2892,36 @@ const allGainerLoser = async (req, res, next) => {
     },
     {
       $addFields: {
+        oneWeekChange: {
+          $round: [
+            { $subtract: ["$ltp", "$yesterday_price.oneWeekBeforeData"] },
+            2,
+          ],
+        },
+        oneMonthChange: {
+          $round: [
+            { $subtract: ["$ltp", "$yesterday_price.oneMonthBeforeData"] },
+            2,
+          ],
+        },
+        sixMonthChange: {
+          $round: [
+            { $subtract: ["$ltp", "$yesterday_price.sixMonthBeforeData"] },
+            2,
+          ],
+        },
+        oneYearChange: {
+          $round: [
+            { $subtract: ["$ltp", "$yesterday_price.oneYearBeforeData"] },
+            2,
+          ],
+        },
+        fiveYearChange: {
+          $round: [
+            { $subtract: ["$ltp", "$yesterday_price.fiveYearBeforeData"] },
+            2,
+          ],
+        },
         oneWeekPercentChange: {
           $round: [
             {
@@ -3088,8 +3149,57 @@ const allGainerLoser = async (req, res, next) => {
     },
     {
       $project: {
-        fundamentals: 0,
-        yesterday_price: 0,
+        date: 1,
+        time: 1,
+        tradingCode: 1,
+        ltp: 1,
+        change: 1,
+        percentChange: 1,
+        category: 1,
+        sector: 1,
+        haltStatus: 1,
+        day: {
+          change: "$change",
+          percentChange: "$percentChange",
+          value: "$value",
+          volume: "$volume",
+          trade: "$trade",
+        },
+        oneWeek: {
+          change: "$oneWeekChange",
+          percentChange: "$oneWeekPercentChange",
+          value: "$oneWeekTotalValue",
+          volume: "$oneWeekTotalVolume",
+          trade: "$oneWeekTotalTrade",
+        },
+        oneMonth: {
+          change: "$oneMonthChange",
+          percentChange: "$oneMonthPercentChange",
+          value: "$oneMonthTotalValue",
+          volume: "$oneMonthTotalVolume",
+          trade: "$oneMonthTotalTrade",
+        },
+        sixMonth: {
+          change: "$sixMonthChange",
+          percentChange: "$sixMonthPercentChange",
+          value: "$sixMonthTotalValue",
+          volume: "$sixMonthTotalVolume",
+          trade: "$sixMonthTotalTrade",
+        },
+        oneYear: {
+          change: "$oneYearChange",
+          percentChange: "$oneYearPercentChange",
+          value: "$oneYearTotalValue",
+          volume: "$oneYearTotalVolume",
+          trade: "$oneYearTotalTrade",
+        },
+        fiveYear: {
+          change: "$fiveYearChange",
+          percentChange: "$fiveYearPercentChange",
+          value: "$fiveYearTotalValue",
+          volume: "$fiveYearTotalVolume",
+          trade: "$fiveYearTotalTrade",
+        },
       },
     },
   ]);
