@@ -29,7 +29,7 @@ router
 
 router
   .route("/portfolio/:id")
-  .get(getPortfolioDetailsById)
+  .get(checkLogin, getPortfolioDetailsById)
   .delete(checkLogin, deletePortfolio);
 
 router.route("/trade/buy").patch(checkLogin, createBuyRequest);

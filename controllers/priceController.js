@@ -376,6 +376,8 @@ const getBarsTvchart = async (req, res) => {
     } else if (resolutionType == "day" && symbolType == "sector") {
       dataTable = "daily_sectors";
 
+      console.log(symbol, new Date(fromTime * 1000), new Date(toTime * 1000));
+
       const sectorPrices = await DailySector.aggregate([
         {
           $match: {
@@ -405,6 +407,8 @@ const getBarsTvchart = async (req, res) => {
         },
       ]);
       latestPrice = sectorPrices;
+
+      console.log(sectorPrices);
     }
 
     let data = {
@@ -457,6 +461,39 @@ const getIpoList = async (req, res, next) => {
     .sort({ subscriptionEnd: -1 })
     .limit(20);
   res.status(200).json(ipo);
+};
+
+/*
+  @api:       GET /api/prices/getIndexInfo
+  @desc:      get Index Info
+  @access:    public
+*/
+const getIndexInfo = async (req, res, next) => {
+  const marketOpenStatus = await getMarketOpenStatus();
+
+  const index = await DayMinuteIndex.aggregate([
+    {
+      $match: {
+        tradingCode: "00DSEX",
+      },
+    },
+    {
+      $sort: {
+        time: -1,
+      },
+    },
+    {
+      $limit: 1,
+    },
+  ]);
+
+  res.status(200).json({
+    Status: "success",
+    Data: {
+      marketOpenStatus,
+      indexLatestData: index[0],
+    },
+  });
 };
 
 /*
@@ -2584,7 +2621,7 @@ const blocktrByStock = async (req, res, next) => {
   @access:    public
 */
 const topGainerLoser = async (req, res, next) => {
-  const setLimit = 8;
+  const setLimit = 10;
 
   const gainerLoser = await LatestPrice.aggregate([
     {
@@ -3247,20 +3284,26 @@ const screener = async (req, res, next) => {
       filters[key] = {};
 
       filters[key]["$eq"] = value[0].toString();
-    } else if (["sma20", "sma50", "sma200"].includes(key)) {
-      filters["$expr"] = {};
-
+    } else if (
+      ["sma20", "sma50", "sma200", "ema20", "ema50", "ema200"].includes(key)
+    ) {
+      if (!filters["$expr"]) {
+        filters["$expr"] = {};
+        filters["$expr"]["$and"] = [];
+      }
+      tempCond = {};
       const param = value[2];
       const datapoint1 = "$" + minvalue;
       const datapoint2 = "$" + maxvalue;
 
       if (param == "gt") {
-        filters["$expr"]["$gt"] = [datapoint1, datapoint2];
+        tempCond["$gt"] = [datapoint1, datapoint2];
       } else if (param == "lt") {
-        filters["$expr"]["$lt"] = [datapoint1, datapoint2];
+        tempCond["$lt"] = [datapoint1, datapoint2];
       } else if (param == "eq") {
-        filters["$expr"]["$eq"] = [datapoint1, datapoint2];
+        tempCond["$eq"] = [datapoint1, datapoint2];
       }
+      filters["$expr"]["$and"].push(tempCond);
     } else {
       filters[key] = {};
 
@@ -3537,11 +3580,11 @@ const screener = async (req, res, next) => {
         navCurrent: "$screener.navQuarterly.value",
         nocfpsCurrent: "$screener.nocfpsQuarterly.value",
 
-        de: "$screener.de.value",
-        ps: "$screener.ps.value",
-        roe: "$screener.roe.value",
-        roa: "$screener.roa.value",
-        currentRatio: "$screener.currentRatio.value",
+        de: { $round: ["$screener.de.value", 2] },
+        ps: { $round: ["$screener.ps.value", 2] },
+        roe: { $round: ["$screener.roe.value", 2] },
+        roa: { $round: ["$screener.roa.value", 2] },
+        currentRatio: { $round: ["$screener.currentRatio.value", 2] },
 
         dividendYield: "$screener.dividendYield.value",
         cashDividend: "$screener.dividend.cash",
@@ -4381,6 +4424,7 @@ module.exports = {
   topFinancials,
   marketDepth,
   marketDepthAllInst,
+  getIndexInfo,
   pytest,
   newtest,
 };

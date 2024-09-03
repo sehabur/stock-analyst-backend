@@ -23,6 +23,7 @@ const {
   blocktrByStock,
   screener,
   topFinancials,
+  getIndexInfo,
   pytest,
   getSymbolTvchart,
   getBarsTvchart,
@@ -34,6 +35,8 @@ const {
 const router = express.Router();
 
 router.route("/latestPrice").get(latestPrice);
+
+router.route("/getIndexInfo").get(getIndexInfo);
 
 router.route("/indexMover").get(indexMover);
 
