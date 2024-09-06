@@ -8,12 +8,16 @@ const {
   getUserProfileById,
   updateUserProfile,
   addFavoriteItem,
+  getFavoritesByUserId,
   getAllPortfolioByUser,
   createNewPortfolio,
   getPortfolioDetailsById,
   deletePortfolio,
   createBuyRequest,
   createSellRequest,
+  getPriceAlertsByUserId,
+  createPriceAlerts,
+  deletePriceAlerts,
 } = require("../controllers/userController");
 
 const { checkLogin } = require("../middlewares/authMiddleware");
@@ -37,6 +41,15 @@ router.route("/trade/buy").patch(checkLogin, createBuyRequest);
 router.route("/trade/sell").patch(checkLogin, createSellRequest);
 
 router.patch("/favorite", checkLogin, addFavoriteItem);
+
+router.get("/favorite/:id", checkLogin, getFavoritesByUserId);
+
+// Price alerts //
+router.post("/priceAlerts", checkLogin, createPriceAlerts);
+
+router.route("/priceAlerts/user/:id").get(checkLogin, getPriceAlertsByUserId);
+
+router.delete("/priceAlerts/:id", checkLogin, deletePriceAlerts);
 
 router.post("/signin", signin);
 

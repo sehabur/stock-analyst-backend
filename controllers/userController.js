@@ -10,6 +10,7 @@ const PortfolioItem = require("../models/portfolioItemModel");
 const LatestPrice = require("../models/latestPriceModel");
 
 const { sendMailToUser } = require("../helper/mailer");
+const PriceAlert = require("../models/priceAlertModel");
 
 /*
   @api:       POST /api/users/signin/
@@ -19,7 +20,10 @@ const { sendMailToUser } = require("../helper/mailer");
 const signin = async (req, res, next) => {
   try {
     const { phone: phoneNumber, password } = req.body;
-    const user = await User.findOne({ phone: phoneNumber, isActive: true });
+    const user = await User.findOne({
+      phone: phoneNumber,
+      isActive: true,
+    }).populate("priceAlerts");
 
     if (!user) {
       const error = createError(404, "User not found");
@@ -37,35 +41,27 @@ const signin = async (req, res, next) => {
       return next(error);
     }
 
-    const {
-      _id,
-      name,
-      email,
-      phone,
-      portfolio,
-      favorites,
-      isActive,
-      isPremium,
-      premiumExpireDate,
-      isFreeTrialUsed,
-      createdAt,
-    } = user;
+    // const {
+    //   _id,
+    //   name,
+    //   email,
+    //   phone,
+    //   portfolio,
+    //   favorites,
+    //   priceAlerts,
+    //   isActive,
+    //   isPremium,
+    //   premiumExpireDate,
+    //   isFreeTrialUsed,
+    //   createdAt,
+    // } = user;
 
     res.status(200).json({
       message: "Login attempt successful",
       user: {
-        _id,
-        name,
-        email,
-        phone,
-        portfolio,
-        favorites,
-        isActive,
-        isPremium,
-        createdAt,
-        premiumExpireDate,
-        isFreeTrialUsed,
-        token: generateToken(_id),
+        ...user._doc,
+        password: null,
+        token: generateToken(user._id),
         isLoggedIn: true,
       },
     });
@@ -147,6 +143,29 @@ const getUserProfileById = async (req, res, next) => {
 };
 
 /*
+  @api:       GET /api/users/favorite/:userId
+  @desc:      get user profile of a specific user
+  @access:    private
+*/
+const getFavoritesByUserId = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      "name phone email isPremium favorites"
+    );
+
+    if (user) {
+      res.status(200).json(user);
+    } else {
+      const error = createError(404, "User not found");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
+  }
+};
+
+/*
   @api:       PATCH /api/users/favorite
   @desc:      Add Favorite Item
   @access:    private
@@ -160,7 +179,6 @@ const addFavoriteItem = async (req, res, next) => {
       const result = await User.findByIdAndUpdate(userId, {
         $push: { favorites: tradingCode },
       });
-      console.log(result);
       message = "Item added to favorites";
     } else if (type === "remove") {
       await User.findByIdAndUpdate(userId, {
@@ -383,65 +401,65 @@ const deletePortfolio = async (req, res, next) => {
   @access:    private
 */
 const createBuyRequest = async (req, res, next) => {
-  // try {
-  let { tradingCode, quantity, price, commission, portfolioId } = req.body;
+  try {
+    let { tradingCode, quantity, price, commission, portfolioId } = req.body;
 
-  price = Number(price);
-  quantity = Number(quantity);
-  commission = Number(commission);
+    price = Number(price);
+    quantity = Number(quantity);
+    commission = Number(commission);
 
-  const portfolio = await Portfolio.findById(portfolioId).populate("items");
+    const portfolio = await Portfolio.findById(portfolioId).populate("items");
 
-  const existingItem = portfolio.items.find(
-    (item) => item.tradingCode === tradingCode
-  );
-  let newTradeItem;
-
-  if (existingItem) {
-    const newTotalPrice = quantity * price;
-    const newTotalCommission = (newTotalPrice * commission) / 100;
-    const finalNewTotalPrice = newTotalPrice + newTotalCommission;
-
-    const updatedQuantity = Number(existingItem.quantity + quantity);
-    const updatedToalPrice = Number(
-      (existingItem.totalPrice + finalNewTotalPrice).toFixed(2)
+    const existingItem = portfolio.items.find(
+      (item) => item.tradingCode === tradingCode
     );
-    const updatedPrice = Number(
-      (updatedToalPrice / updatedQuantity).toFixed(2)
-    );
+    let newTradeItem;
 
-    newTradeItem = await PortfolioItem.findByIdAndUpdate(
-      existingItem._id,
-      {
-        quantity: updatedQuantity,
-        price: updatedPrice,
-        totalPrice: updatedToalPrice,
-      },
-      { new: true }
-    );
-  } else {
-    const totalPrice = quantity * price;
-    const totalCommission = (totalPrice * commission) / 100;
-    const finalTotalPrice = Number((totalPrice + totalCommission).toFixed(2));
+    if (existingItem) {
+      const newTotalPrice = quantity * price;
+      const newTotalCommission = (newTotalPrice * commission) / 100;
+      const finalNewTotalPrice = newTotalPrice + newTotalCommission;
 
-    newTradeItem = await PortfolioItem.create({
-      tradingCode,
-      quantity,
-      price,
-      totalPrice: finalTotalPrice,
-      portfolioId: portfolioId,
-    });
+      const updatedQuantity = Number(existingItem.quantity + quantity);
+      const updatedToalPrice = Number(
+        (existingItem.totalPrice + finalNewTotalPrice).toFixed(2)
+      );
+      const updatedPrice = Number(
+        (updatedToalPrice / updatedQuantity).toFixed(2)
+      );
 
-    await Portfolio.findByIdAndUpdate(portfolioId, {
-      $push: { items: newTradeItem.id, itemList: tradingCode },
-    });
+      newTradeItem = await PortfolioItem.findByIdAndUpdate(
+        existingItem._id,
+        {
+          quantity: updatedQuantity,
+          price: updatedPrice,
+          totalPrice: updatedToalPrice,
+        },
+        { new: true }
+      );
+    } else {
+      const totalPrice = quantity * price;
+      const totalCommission = (totalPrice * commission) / 100;
+      const finalTotalPrice = Number((totalPrice + totalCommission).toFixed(2));
+
+      newTradeItem = await PortfolioItem.create({
+        tradingCode,
+        quantity,
+        price,
+        totalPrice: finalTotalPrice,
+        portfolioId: portfolioId,
+      });
+
+      await Portfolio.findByIdAndUpdate(portfolioId, {
+        $push: { items: newTradeItem.id, itemList: tradingCode },
+      });
+    }
+
+    res.status(200).json(newTradeItem);
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
   }
-
-  res.status(200).json(newTradeItem);
-  // } catch (err) {
-  //   const error = createError(500, "Error occured");
-  //   next(error);
-  // }
 };
 /*
   @api:       PATCH /api/users/trade/sell
@@ -490,6 +508,82 @@ const createSellRequest = async (req, res, next) => {
     }
 
     res.status(200).json(newTradeItem);
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
+  }
+};
+
+/*
+  @api:       GET /api/users/priceAlerts/user/:id
+  @desc:      get user profile of a specific user
+  @access:    private
+*/
+const getPriceAlertsByUserId = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("name phone email isPremium priceAlerts")
+      .populate("priceAlerts");
+    if (user) {
+      res.status(200).json(user);
+    } else {
+      const error = createError(404, "User not found");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
+  }
+};
+
+/*
+  @api:       DELETE /api/users/priceAlerts/:id
+  @desc:      Delete portfolio
+  @access:    private
+*/
+const deletePriceAlerts = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const userId = req.user.id;
+
+    const alertItem = await PriceAlert.findByIdAndDelete(id);
+
+    await User.findByIdAndUpdate(userId, {
+      $pull: { priceAlerts: id },
+    });
+
+    res.status(200).json({
+      Status: "success",
+      Item: alertItem,
+    });
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
+  }
+};
+
+/*
+  @api:       POST /api/users/priceAlerts
+  @desc:      buy request
+  @access:    private
+*/
+const createPriceAlerts = async (req, res, next) => {
+  try {
+    let { tradingCode, type, price, details } = req.body;
+
+    const newAlert = await PriceAlert.create({
+      tradingCode,
+      type,
+      price: Number(price),
+      details,
+      user: req.user.id,
+    });
+
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { priceAlerts: newAlert._id },
+    });
+
+    res.status(200).json(newAlert);
   } catch (err) {
     const error = createError(500, "Error occured");
     next(error);
@@ -644,6 +738,7 @@ module.exports = {
   getUserProfileById,
   updateUserProfile,
   addFavoriteItem,
+  getFavoritesByUserId,
   changePassword,
   resetPasswordLink,
   setNewPassword,
@@ -653,4 +748,7 @@ module.exports = {
   deletePortfolio,
   createBuyRequest,
   createSellRequest,
+  getPriceAlertsByUserId,
+  createPriceAlerts,
+  deletePriceAlerts,
 };

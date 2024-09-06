@@ -56,6 +56,17 @@ const userSchema = mongoose.Schema(
         type: String,
       },
     ],
+    favorites: [
+      {
+        type: String,
+      },
+    ],
+    priceAlerts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Price_alert",
+      },
+    ],
   },
   {
     timestamps: true,

@@ -39,7 +39,7 @@ const checkLogin = async (req, res, next) => {
 const checkPremium = async (req, res, next) => {
   try {
     const user = req.user;
-    console.log(user);
+
     if (user?.isPremium) {
       return next();
     } else {
