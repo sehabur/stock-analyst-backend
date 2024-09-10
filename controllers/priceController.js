@@ -2626,7 +2626,7 @@ const blocktrByStock = async (req, res, next) => {
 };
 
 /*
-  @api:       GET /api/prices/topGainerLoser
+  @api:       GET /api/prices/topGainerLoser                                                                                               
   @desc:      get gainer and losers data
   @access:    public
 */
@@ -3415,23 +3415,13 @@ const screener = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "lastday_prices",
-        // pipeline: [
-        //   {
-        //     $match: {
-        //       date: {
-        //         $lt: minuteDataUpdateDate,
-        //       },
-        //     },
-        //   },
-        //   {
-        //     $sort: {
-        //       date: -1,
-        //     },
-        //   },
-        //   {
-        //     $limit: 1,
-        //   },
-        // ],
+        pipeline: [
+          {
+            $match: {
+              date: minuteDataUpdateDate,
+            },
+          },
+        ],
       },
     },
     {
@@ -3455,35 +3445,35 @@ const screener = async (req, res, next) => {
       $addFields: {
         oneMonthBeforeLtp: {
           $cond: [
-            { $isNumber: "$lastday_prices.oneMonthBeforeData" },
+            { $gt: ["$lastday_prices.oneMonthBeforeData", 0] },
             "$lastday_prices.oneMonthBeforeData",
             "$ltp",
           ],
         },
         oneWeekBeforeLtp: {
           $cond: [
-            { $isNumber: "$lastday_prices.oneWeekBeforeData" },
+            { $gt: ["$lastday_prices.oneWeekBeforeData", 0] },
             "$lastday_prices.oneWeekBeforeData",
             "$ltp",
           ],
         },
         sixMonthBeforeLtp: {
           $cond: [
-            { $isNumber: "$lastday_prices.sixMonthBeforeData" },
+            { $gt: ["$lastday_prices.sixMonthBeforeData", 0] },
             "$lastday_prices.sixMonthBeforeData",
             "$ltp",
           ],
         },
         oneYearBeforeLtp: {
           $cond: [
-            { $isNumber: "$lastday_prices.oneYearBeforeData" },
+            { $gt: ["$lastday_prices.oneYearBeforeData", 0] },
             "$lastday_prices.oneYearBeforeData",
             "$ltp",
           ],
         },
         fiveYearBeforeLtp: {
           $cond: [
-            { $isNumber: "$lastday_prices.fiveYearBeforeData" },
+            { $gt: ["$lastday_prices.fiveYearBeforeData", 0] },
             "$lastday_prices.fiveYearBeforeData",
             "$ltp",
           ],

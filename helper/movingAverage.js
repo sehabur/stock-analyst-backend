@@ -270,6 +270,8 @@ function calculatePivotPoints(high, low, close) {
 }
 
 function calculateSmaLastValue(prices, period) {
+  if (prices.length < period) return "-";
+
   const slicedPrices = prices.slice(-period);
 
   const sum = slicedPrices.reduce((total, current) => {
@@ -282,6 +284,8 @@ function calculateSmaLastValue(prices, period) {
 }
 
 function calculateEmaLastValue(prices, period) {
+  if (prices.length < period) return "-";
+
   const k = 2 / (period + 1);
   let emaArray = [];
   let sma = 0;
