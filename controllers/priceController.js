@@ -1262,6 +1262,11 @@ const dailySectorPrice = async (req, res, next) => {
     },
   ]);
 
+  const yesterdayPrice = await YesterdayPrice.findOne({
+    tradingCode: sector,
+    date: minuteDataUpdateDate,
+  });
+
   const dailySector = await DailySector.aggregate([
     {
       $match: {
@@ -1485,9 +1490,12 @@ const dailySectorPrice = async (req, res, next) => {
 
   const latestSector = minuteSector[minuteSector.length - 1];
 
-  res
-    .status(200)
-    .json({ latest: latestSector, minute: minuteSector, ...dailySector[0] });
+  res.status(200).json({
+    latest: latestSector,
+    lastDay: yesterdayPrice,
+    minute: minuteSector,
+    ...dailySector[0],
+  });
 };
 
 /*
