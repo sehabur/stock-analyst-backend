@@ -1688,6 +1688,7 @@ const stockDetails = async (req, res, next) => {
 
   const yesterdayPrice = await YesterdayPrice.findOne({
     tradingCode: tradingCode,
+    date: minuteDataUpdateDate,
   });
 
   const dailyPrice = await DailyPrice.aggregate([
@@ -2266,6 +2267,7 @@ const indexDetails = async (req, res, next) => {
 
   const yesterdayPrice = await YesterdayPrice.findOne({
     tradingCode: tradingCode,
+    date: minuteDataUpdateDate,
   });
 
   const dailyPrice = await DailyPrice.aggregate([
@@ -2773,7 +2775,7 @@ const topGainerLoser = async (req, res, next) => {
           {
             $sort: {
               percentChange: 1,
-              tradingCode: -1,
+              tradingCode: 1,
             },
           },
           {
@@ -2802,6 +2804,7 @@ const topGainerLoser = async (req, res, next) => {
           {
             $sort: {
               volume: 1,
+              tradingCode: 1,
             },
           },
           {
@@ -2830,6 +2833,7 @@ const topGainerLoser = async (req, res, next) => {
           {
             $sort: {
               trade: 1,
+              tradingCode: 1,
             },
           },
           {
@@ -2858,6 +2862,7 @@ const topGainerLoser = async (req, res, next) => {
           {
             $sort: {
               value: 1,
+              tradingCode: 1,
             },
           },
           {
@@ -2894,6 +2899,10 @@ const topGainerLoser = async (req, res, next) => {
   @access:    public
 */
 const allGainerLoser = async (req, res, next) => {
+  const { minuteDataUpdateDate } = await Setting.findOne().select(
+    "minuteDataUpdateDate"
+  );
+
   const gainerLoser = await LatestPrice.aggregate([
     {
       $lookup: {
@@ -2910,6 +2919,13 @@ const allGainerLoser = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "yesterday_price",
+        pipeline: [
+          {
+            $match: {
+              date: minuteDataUpdateDate,
+            },
+          },
+        ],
       },
     },
     { $unwind: "$yesterday_price" },
@@ -2923,156 +2939,207 @@ const allGainerLoser = async (req, res, next) => {
     },
     { $unwind: "$halt_shares" },
     {
-      $match: {
-        "yesterday_price.oneWeekBeforeData": {
-          $ne: "-",
-        },
-        "yesterday_price.oneMonthBeforeData": {
-          $ne: "-",
-        },
-        "yesterday_price.sixMonthBeforeData": {
-          $ne: "-",
-        },
-        "yesterday_price.oneYearBeforeData": {
-          $ne: "-",
-        },
-        "yesterday_price.fiveYearBeforeData": {
-          $ne: "-",
-        },
+      $addFields: {
         ltp: {
-          $gt: 0,
+          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
         },
       },
     },
     {
       $addFields: {
         oneWeekChange: {
-          $round: [
-            { $subtract: ["$ltp", "$yesterday_price.oneWeekBeforeData"] },
-            2,
+          $cond: [
+            { $gt: ["$yesterday_price.oneWeekBeforeData", 0] },
+            {
+              $round: [
+                { $subtract: ["$ltp", "$yesterday_price.oneWeekBeforeData"] },
+                2,
+              ],
+            },
+            0,
           ],
         },
         oneMonthChange: {
-          $round: [
-            { $subtract: ["$ltp", "$yesterday_price.oneMonthBeforeData"] },
-            2,
+          $cond: [
+            { $gt: ["$yesterday_price.oneMonthBeforeData", 0] },
+            {
+              $round: [
+                { $subtract: ["$ltp", "$yesterday_price.oneMonthBeforeData"] },
+                2,
+              ],
+            },
+            0,
           ],
         },
         sixMonthChange: {
-          $round: [
-            { $subtract: ["$ltp", "$yesterday_price.sixMonthBeforeData"] },
-            2,
+          $cond: [
+            { $gt: ["$yesterday_price.sixMonthBeforeData", 0] },
+            {
+              $round: [
+                { $subtract: ["$ltp", "$yesterday_price.sixMonthBeforeData"] },
+                2,
+              ],
+            },
+            0,
           ],
         },
         oneYearChange: {
-          $round: [
-            { $subtract: ["$ltp", "$yesterday_price.oneYearBeforeData"] },
-            2,
+          $cond: [
+            { $gt: ["$yesterday_price.oneYearBeforeData", 0] },
+            {
+              $round: [
+                { $subtract: ["$ltp", "$yesterday_price.oneYearBeforeData"] },
+                2,
+              ],
+            },
+            0,
           ],
         },
         fiveYearChange: {
-          $round: [
-            { $subtract: ["$ltp", "$yesterday_price.fiveYearBeforeData"] },
-            2,
+          $cond: [
+            { $gt: ["$yesterday_price.fiveYearBeforeData", 0] },
+            {
+              $round: [
+                { $subtract: ["$ltp", "$yesterday_price.fiveYearBeforeData"] },
+                2,
+              ],
+            },
+            0,
           ],
         },
         oneWeekPercentChange: {
-          $round: [
+          $cond: [
+            { $gt: ["$yesterday_price.oneWeekBeforeData", 0] },
             {
-              $multiply: [
+              $round: [
                 {
-                  $divide: [
+                  $multiply: [
                     {
-                      $subtract: ["$ltp", "$yesterday_price.oneWeekBeforeData"],
+                      $divide: [
+                        {
+                          $subtract: [
+                            "$ltp",
+                            "$yesterday_price.oneWeekBeforeData",
+                          ],
+                        },
+                        "$yesterday_price.oneWeekBeforeData",
+                      ],
                     },
-                    "$yesterday_price.oneWeekBeforeData",
+                    100,
                   ],
                 },
-                100,
+                2,
               ],
             },
-            2,
+            0,
           ],
         },
         oneMonthPercentChange: {
-          $round: [
+          $cond: [
+            { $gt: ["$yesterday_price.oneMonthBeforeData", 0] },
             {
-              $multiply: [
+              $round: [
                 {
-                  $divide: [
+                  $multiply: [
                     {
-                      $subtract: [
-                        "$ltp",
+                      $divide: [
+                        {
+                          $subtract: [
+                            "$ltp",
+                            "$yesterday_price.oneMonthBeforeData",
+                          ],
+                        },
                         "$yesterday_price.oneMonthBeforeData",
                       ],
                     },
-                    "$yesterday_price.oneMonthBeforeData",
+                    100,
                   ],
                 },
-                100,
+                2,
               ],
             },
-            2,
+            0,
           ],
         },
         sixMonthPercentChange: {
-          $round: [
+          $cond: [
+            { $gt: ["$yesterday_price.sixMonthBeforeData", 0] },
             {
-              $multiply: [
+              $round: [
                 {
-                  $divide: [
+                  $multiply: [
                     {
-                      $subtract: [
-                        "$ltp",
+                      $divide: [
+                        {
+                          $subtract: [
+                            "$ltp",
+                            "$yesterday_price.sixMonthBeforeData",
+                          ],
+                        },
                         "$yesterday_price.sixMonthBeforeData",
                       ],
                     },
-                    "$yesterday_price.sixMonthBeforeData",
+                    100,
                   ],
                 },
-                100,
+                2,
               ],
             },
-            2,
+            0,
           ],
         },
         oneYearPercentChange: {
-          $round: [
+          $cond: [
+            { $gt: ["$yesterday_price.oneYearBeforeData", 0] },
             {
-              $multiply: [
+              $round: [
                 {
-                  $divide: [
+                  $multiply: [
                     {
-                      $subtract: ["$ltp", "$yesterday_price.oneYearBeforeData"],
+                      $divide: [
+                        {
+                          $subtract: [
+                            "$ltp",
+                            "$yesterday_price.oneYearBeforeData",
+                          ],
+                        },
+                        "$yesterday_price.oneYearBeforeData",
+                      ],
                     },
-                    "$yesterday_price.oneYearBeforeData",
+                    100,
                   ],
                 },
-                100,
+                2,
               ],
             },
-            2,
+            0,
           ],
         },
         fiveYearPercentChange: {
-          $round: [
+          $cond: [
+            { $gt: ["$yesterday_price.fiveYearBeforeData", 0] },
             {
-              $multiply: [
+              $round: [
                 {
-                  $divide: [
+                  $multiply: [
                     {
-                      $subtract: [
-                        "$ltp",
+                      $divide: [
+                        {
+                          $subtract: [
+                            "$ltp",
+                            "$yesterday_price.fiveYearBeforeData",
+                          ],
+                        },
                         "$yesterday_price.fiveYearBeforeData",
                       ],
                     },
-                    "$yesterday_price.fiveYearBeforeData",
+                    100,
                   ],
                 },
-                100,
+                2,
               ],
             },
-            2,
+            0,
           ],
         },
         oneWeekTotalValue: {
