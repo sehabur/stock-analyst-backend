@@ -2,6 +2,9 @@
 /node_modules
 
 # misc
+serviceAccountKey.json
+
+# env
 .env
 .env.production
 .env.development

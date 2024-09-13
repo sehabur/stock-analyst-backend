@@ -11,6 +11,7 @@ const LatestPrice = require("../models/latestPriceModel");
 
 const { sendMailToUser } = require("../helper/mailer");
 const PriceAlert = require("../models/priceAlertModel");
+const { sendNotificationToFcmToken } = require("../helper/fcm");
 
 /*
   @api:       POST /api/users/signin/
@@ -255,6 +256,28 @@ const updateFcmToken = async (req, res, next) => {
     }
   } catch (err) {
     const error = createError(500, "Fcm token update failed");
+    next(error);
+  }
+};
+
+/*
+  @api:       PATCH /api/users/sendNotification/:id
+  @desc:      update user profile
+  @access:    private
+*/
+const sendNotification = async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const { title, body } = req.body;
+
+    const { status, message } = await sendNotificationToFcmToken(
+      userId,
+      title,
+      body
+    );
+    res.status(status).json({ message });
+  } catch (err) {
+    const error = createError(500, "Something went wrong");
     next(error);
   }
 };
@@ -767,6 +790,7 @@ module.exports = {
   signup,
   getUserProfileById,
   updateUserProfile,
+  sendNotification,
   updateFcmToken,
   addFavoriteItem,
   getFavoritesByUserId,

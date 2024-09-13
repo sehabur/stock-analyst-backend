@@ -8,6 +8,7 @@ const {
   getUserProfileById,
   updateUserProfile,
   updateFcmToken,
+  sendNotification,
   addFavoriteItem,
   getFavoritesByUserId,
   getAllPortfolioByUser,
@@ -62,5 +63,7 @@ router
   .patch(checkLogin, updateUserProfile);
 
 router.route("/profile/updateFcmToken/:id").patch(checkLogin, updateFcmToken);
+
+router.route("/sendNotification/:id").post(checkLogin, sendNotification);
 
 module.exports = router;
