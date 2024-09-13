@@ -7,6 +7,7 @@ const {
   signup,
   getUserProfileById,
   updateUserProfile,
+  updateFcmToken,
   addFavoriteItem,
   getFavoritesByUserId,
   getAllPortfolioByUser,
@@ -59,5 +60,7 @@ router
   .route("/profile/:id")
   .get(getUserProfileById)
   .patch(checkLogin, updateUserProfile);
+
+router.route("/profile/updateFcmToken/:id").patch(checkLogin, updateFcmToken);
 
 module.exports = router;

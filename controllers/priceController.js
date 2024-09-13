@@ -40,7 +40,6 @@ const {
   calculateWilliamsPercentRLastValue,
   calculateMoneyFlowIndexLastValue,
   calculatePivotPoints,
-  calculateStochasticK,
 } = require("../helper/movingAverage");
 
 const { pipeline } = require("stream");
@@ -919,8 +918,6 @@ const allStockBeta = async (req, res, next) => {
       },
     },
   ]);
-
-  // res.status(200).json(beta.length);
 
   const loser = beta
     .filter((item) => item.beta < 0)

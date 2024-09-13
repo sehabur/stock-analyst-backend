@@ -197,6 +197,7 @@ const addFavoriteItem = async (req, res, next) => {
     next(error);
   }
 };
+
 /*
   @api:       PATCH /api/users/profile/:id
   @desc:      update user profile
@@ -225,6 +226,35 @@ const updateUserProfile = async (req, res, next) => {
     }
   } catch (err) {
     const error = createError(500, "User update failed");
+    next(error);
+  }
+};
+
+/*
+  @api:       PATCH /api/users/profile/updateFcmToken/:id
+  @desc:      update user profile
+  @access:    private
+*/
+const updateFcmToken = async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const { fcmToken } = req.body;
+
+    if (userId === req.user.id) {
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          fcmToken,
+        },
+        { new: true }
+      ).select("-password -__v");
+      res.status(201).json({ message: "Fcm token update successful" });
+    } else {
+      const error = createError(400, "Fcm token update failed");
+      next(error);
+    }
+  } catch (err) {
+    const error = createError(500, "Fcm token update failed");
     next(error);
   }
 };
@@ -737,6 +767,7 @@ module.exports = {
   signup,
   getUserProfileById,
   updateUserProfile,
+  updateFcmToken,
   addFavoriteItem,
   getFavoritesByUserId,
   changePassword,
