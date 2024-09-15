@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const serviceAccount = require("../serviceAccountKey.json");
 const User = require("../models/userModel");
+const Notification = require("../models/notificationModel");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -26,6 +27,15 @@ const sendNotificationToFcmToken = async (userId, title, body) => {
     };
 
     const response = await admin.messaging().send(payload);
+
+    await Notification.create({
+      title,
+      body,
+      user: userId,
+      fcmToken: user.fcmToken,
+      firebaseResponse: response || "",
+      deliveryTime: new Date(),
+    });
 
     return {
       status: 200,

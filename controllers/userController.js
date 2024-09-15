@@ -12,6 +12,7 @@ const LatestPrice = require("../models/latestPriceModel");
 const { sendMailToUser } = require("../helper/mailer");
 const PriceAlert = require("../models/priceAlertModel");
 const { sendNotificationToFcmToken } = require("../helper/fcm");
+const Notification = require("../models/notificationModel");
 
 /*
   @api:       POST /api/users/signin/
@@ -21,10 +22,11 @@ const { sendNotificationToFcmToken } = require("../helper/fcm");
 const signin = async (req, res, next) => {
   try {
     const { phone: phoneNumber, password } = req.body;
+
     const user = await User.findOne({
       phone: phoneNumber,
       isActive: true,
-    }).populate("priceAlerts");
+    });
 
     if (!user) {
       const error = createError(404, "User not found");
@@ -42,20 +44,8 @@ const signin = async (req, res, next) => {
       return next(error);
     }
 
-    // const {
-    //   _id,
-    //   name,
-    //   email,
-    //   phone,
-    //   portfolio,
-    //   favorites,
-    //   priceAlerts,
-    //   isActive,
-    //   isPremium,
-    //   premiumExpireDate,
-    //   isFreeTrialUsed,
-    //   createdAt,
-    // } = user;
+    const isPremiumEligible =
+      user.isPremium && isDateTimeSmallerThanToday(user.premiumExpireDate);
 
     res.status(200).json({
       message: "Login attempt successful",
@@ -64,6 +54,7 @@ const signin = async (req, res, next) => {
         password: null,
         token: generateToken(user._id),
         isLoggedIn: true,
+        isPremiumEligible,
       },
     });
   } catch (err) {
@@ -128,11 +119,21 @@ const signup = async (req, res, next) => {
 */
 const getUserProfileById = async (req, res, next) => {
   try {
-    const userId = req.params.id;
-    const user = await User.findById(userId).select("-password -__v");
+    const user = await User.findById(req.params.id).select("-password -__v");
+
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const isPremiumEligible =
+      user.isPremium && isDateTimeSmallerThanToday(user.premiumExpireDate);
 
     if (user) {
-      res.status(200).json(user);
+      res.status(200).json({
+        ...user._doc,
+        isLoggedIn: true,
+        isPremiumEligible,
+      });
     } else {
       const error = createError(404, "User not found");
       next(error);
@@ -142,29 +143,46 @@ const getUserProfileById = async (req, res, next) => {
     next(error);
   }
 };
-
 /*
-  @api:       GET /api/users/favorite/:userId
+  @api:       GET /api/users/notification/:id
   @desc:      get user profile of a specific user
   @access:    private
 */
-const getFavoritesByUserId = async (req, res, next) => {
+const getNotificationByUserId = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).select(
-      "name phone email isPremium favorites"
-    );
+    const notif = await Notification.find({ user: req.params.id }).sort({
+      deliveryTime: -1,
+    });
 
-    if (user) {
-      res.status(200).json(user);
-    } else {
-      const error = createError(404, "User not found");
-      next(error);
-    }
+    res.status(200).json(notif);
   } catch (err) {
     const error = createError(500, "Error occured");
     next(error);
   }
 };
+
+// /*
+//   @api:       GET /api/users/favorite/:userId
+//   @desc:      get user data of a profile
+//   @access:    private
+// */
+// const getFavoritesByUserId = async (req, res, next) => {
+//   try {
+//     const user = await User.findById(req.params.id).select(
+//       "name phone email isPremium favorites"
+//     );
+
+//     if (user) {
+//       res.status(200).json(user);
+//     } else {
+//       const error = createError(404, "User not found");
+//       next(error);
+//     }
+//   } catch (err) {
+//     const error = createError(500, "Error occured");
+//     next(error);
+//   }
+// };
 
 /*
   @api:       PATCH /api/users/favorite
@@ -261,13 +279,14 @@ const updateFcmToken = async (req, res, next) => {
 };
 
 /*
-  @api:       PATCH /api/users/sendNotification/:id
+  @api:       POST /api/users/sendNotification/:id
   @desc:      update user profile
   @access:    private
 */
 const sendNotification = async (req, res, next) => {
   try {
     const userId = req.params.id;
+
     const { title, body } = req.body;
 
     const { status, message } = await sendNotificationToFcmToken(
@@ -574,15 +593,82 @@ const createSellRequest = async (req, res, next) => {
 */
 const getPriceAlertsByUserId = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id)
-      .select("name phone email isPremium priceAlerts")
-      .populate("priceAlerts");
-    if (user) {
-      res.status(200).json(user);
-    } else {
-      const error = createError(404, "User not found");
-      next(error);
+    const alerts = await PriceAlert.find({ user: req.params.id });
+    res.status(200).json(alerts);
+  } catch (err) {
+    const error = createError(500, "Error occured");
+    next(error);
+  }
+};
+
+/*
+  @api:       GET /api/users/schedulePriceAlertNotification/
+  @desc:      get user profile of a specific user
+  @access:    private
+*/
+const schedulePriceAlertNotification = async (req, res, next) => {
+  try {
+    const alerts = await PriceAlert.aggregate([
+      {
+        $match: {
+          status: "live",
+        },
+      },
+      {
+        $lookup: {
+          from: "latest_prices",
+          localField: "tradingCode",
+          foreignField: "tradingCode",
+          as: "latest_price",
+          pipeline: [
+            {
+              $match: {
+                ltp: { $ne: 0 },
+              },
+            },
+          ],
+        },
+      },
+      { $unwind: "$latest_price" },
+      {
+        $project: {
+          _id: 1,
+          tradingCode: 1,
+          targetPrice: "$price",
+          type: 1,
+          user: 1,
+          currentPrice: "$latest_price.ltp",
+        },
+      },
+    ]);
+
+    for (let alert of alerts) {
+      const { _id, currentPrice, targetPrice, type, tradingCode, user } = alert;
+
+      if (
+        (type == "above" && currentPrice >= targetPrice) ||
+        (type == "below" && currentPrice <= targetPrice)
+      ) {
+        const title = tradingCode + " Price Alert";
+        const body =
+          "Latest trading price is now BDT " +
+          currentPrice +
+          " which is " +
+          type +
+          " your set value (BDT " +
+          targetPrice +
+          ")";
+
+        const { status } = await sendNotificationToFcmToken(user, title, body);
+
+        if (status == 200) {
+          await PriceAlert.findByIdAndUpdate(_id, {
+            $set: { status: "executed" },
+          });
+        }
+      }
     }
+    res.status(200).json({ message: "Delivered" });
   } catch (err) {
     const error = createError(500, "Error occured");
     next(error);
@@ -601,9 +687,9 @@ const deletePriceAlerts = async (req, res, next) => {
 
     const alertItem = await PriceAlert.findByIdAndDelete(id);
 
-    await User.findByIdAndUpdate(userId, {
-      $pull: { priceAlerts: id },
-    });
+    // await User.findByIdAndUpdate(userId, {
+    //   $pull: { priceAlerts: id },
+    // });
 
     res.status(200).json({
       Status: "success",
@@ -629,12 +715,13 @@ const createPriceAlerts = async (req, res, next) => {
       type,
       price: Number(price),
       details,
+      status: "live",
       user: req.user.id,
     });
 
-    await User.findByIdAndUpdate(req.user.id, {
-      $push: { priceAlerts: newAlert._id },
-    });
+    // await User.findByIdAndUpdate(req.user.id, {
+    //   $push: { priceAlerts: newAlert._id },
+    // });
 
     res.status(200).json(newAlert);
   } catch (err) {
@@ -783,6 +870,22 @@ const addMinutes = (date, minutes) => {
   return date;
 };
 
+const isDateTimeSmallerThanToday = (date) => {
+  if (!date) return false;
+
+  const now = new Date();
+
+  const nowInGMT6 = new Date(now);
+  nowInGMT6.setUTCHours(now.getUTCHours() + 6);
+
+  const inputDateInGMT6 = new Date(date);
+  inputDateInGMT6.setUTCHours(inputDateInGMT6.getUTCHours() + 6);
+
+  // console.log(nowInGMT6, inputDateInGMT6);
+
+  return inputDateInGMT6 > nowInGMT6;
+};
+
 // Exports //
 
 module.exports = {
@@ -793,7 +896,8 @@ module.exports = {
   sendNotification,
   updateFcmToken,
   addFavoriteItem,
-  getFavoritesByUserId,
+  // getFavoritesByUserId,
+  getNotificationByUserId,
   changePassword,
   resetPasswordLink,
   setNewPassword,
@@ -806,4 +910,5 @@ module.exports = {
   getPriceAlertsByUserId,
   createPriceAlerts,
   deletePriceAlerts,
+  schedulePriceAlertNotification,
 };

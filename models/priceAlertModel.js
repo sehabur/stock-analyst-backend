@@ -18,9 +18,12 @@ const priceAlertSchema = mongoose.Schema(
     details: {
       type: String,
     },
+    status: {
+      type: String,
+      enum: ["live", "executed"],
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
       ref: "User",
     },
   },

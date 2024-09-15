@@ -4,7 +4,6 @@ const userSchema = mongoose.Schema(
   {
     name: {
       type: String,
-      // required: true,
     },
     phone: {
       type: String,
@@ -13,7 +12,6 @@ const userSchema = mongoose.Schema(
     },
     email: {
       type: String,
-      // required: true,
     },
     password: {
       type: String,
@@ -56,12 +54,12 @@ const userSchema = mongoose.Schema(
         type: String,
       },
     ],
-    priceAlerts: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Price_alert",
-      },
-    ],
+    // priceAlerts: [
+    //   {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "Price_alert",
+    //   },
+    // ],
     fcmToken: {
       type: String,
     },

@@ -8,6 +8,7 @@ const priceRoute = require("./routes/priceRoute");
 const userRoute = require("./routes/userRoute");
 const tvchartRoute = require("./routes/tvchartRoute");
 const dataInsertRoute = require("./routes/dataInsertRoute");
+const paymentRoute = require("./routes/paymentRoute");
 const adminRoute = require("./routes/adminRoute");
 
 const {
@@ -40,6 +41,7 @@ app.use("/api/prices", priceRoute);
 app.use("/api/users", userRoute);
 app.use("/api/tvcharts", tvchartRoute);
 app.use("/api/dataInsert", dataInsertRoute);
+app.use("/api/payment", paymentRoute);
 app.use("/api/admin", adminRoute);
 
 // Catch 404 and forward to NotFoundHanlder //

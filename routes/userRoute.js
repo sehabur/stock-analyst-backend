@@ -10,7 +10,7 @@ const {
   updateFcmToken,
   sendNotification,
   addFavoriteItem,
-  getFavoritesByUserId,
+  // getFavoritesByUserId,
   getAllPortfolioByUser,
   createNewPortfolio,
   getPortfolioDetailsById,
@@ -20,6 +20,8 @@ const {
   getPriceAlertsByUserId,
   createPriceAlerts,
   deletePriceAlerts,
+  schedulePriceAlertNotification,
+  getNotificationByUserId,
 } = require("../controllers/userController");
 
 const { checkLogin } = require("../middlewares/authMiddleware");
@@ -44,7 +46,7 @@ router.route("/trade/sell").patch(checkLogin, createSellRequest);
 
 router.patch("/favorite", checkLogin, addFavoriteItem);
 
-router.get("/favorite/:id", checkLogin, getFavoritesByUserId);
+// router.get("/favorite/:id", checkLogin, getFavoritesByUserId);
 
 // Price alerts //
 router.post("/priceAlerts", checkLogin, createPriceAlerts);
@@ -52,6 +54,8 @@ router.post("/priceAlerts", checkLogin, createPriceAlerts);
 router.route("/priceAlerts/user/:id").get(checkLogin, getPriceAlertsByUserId);
 
 router.delete("/priceAlerts/:id", checkLogin, deletePriceAlerts);
+
+router.get("/schedulePriceAlertNotification", schedulePriceAlertNotification);
 
 router.post("/signin", signin);
 
@@ -65,5 +69,7 @@ router
 router.route("/profile/updateFcmToken/:id").patch(checkLogin, updateFcmToken);
 
 router.route("/sendNotification/:id").post(checkLogin, sendNotification);
+
+router.route("/notification/:id").get(checkLogin, getNotificationByUserId);
 
 module.exports = router;
