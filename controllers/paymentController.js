@@ -5,6 +5,7 @@ const Package = require("../models/packagesModel");
 const { ObjectId } = require("mongodb");
 const User = require("../models/userModel");
 const Payment = require("../models/paymentsModel");
+const { addDaysToToday } = require("../helper/users");
 
 const isLive = false; //true for live, false for sandbox
 
@@ -167,14 +168,6 @@ const getPackages = async (req, res) => {
 };
 
 // helpers //
-
-function addDaysToToday(days) {
-  const today = new Date();
-  const resultDate = new Date(today);
-  resultDate.setDate(today.getDate() + days);
-  resultDate.setUTCHours(17, 59, 0, 0); // 23:59 at GMT+6 corresponds to 17:59 UTC
-  return resultDate;
-}
 
 module.exports = {
   paymentInit,

@@ -13,6 +13,11 @@ const { sendMailToUser } = require("../helper/mailer");
 const PriceAlert = require("../models/priceAlertModel");
 const { sendNotificationToFcmToken } = require("../helper/fcm");
 const Notification = require("../models/notificationModel");
+const {
+  isDateTimeSmallerThanToday,
+  addDaysToToday,
+  generateSixDigitRandomNumber,
+} = require("../helper/users");
 
 /*
   @api:       POST /api/users/signin/
@@ -110,6 +115,65 @@ const signup = async (req, res, next) => {
     const error = createError(500, "Something went wrong. Please try again");
     next(error);
   }
+};
+
+const generateOtp = async (req, res, next) => {
+  // try {
+  const otp = generateSixDigitRandomNumber();
+
+  const { _id, phone } = req.user;
+
+  const { status } = sendOtpToUser(phone, otp);
+
+  // console.log(_id, phone, status, otp);
+
+  if (status == 200) {
+    const data = await User.findByIdAndUpdate(_id, {
+      $set: { lastOtp: otp },
+    });
+  }
+  res.status(200).json({ message: "Otp sent" });
+  // } catch (error) {
+  //   next(createError(500, "Error occured"));
+  // }
+};
+
+const verifyPhone = async (req, res, next) => {
+  try {
+    const { otp, type } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log(user, otp);
+
+    if (user.lastOtp === Number(otp)) {
+      if (type === "free_trial") {
+        await User.findByIdAndUpdate(req.user._id, {
+          $set: {
+            isPremium: true,
+            premiumExpireDate: addDaysToToday(14),
+            isFreeTrialUsed: true,
+          },
+        });
+      }
+      res.status(200).json({ status: "success", message: "Otp matched" });
+    } else {
+      res.status(400).json({ status: "failed", message: "Otp does not match" });
+    }
+  } catch (error) {
+    next(createError(500, "Something went wrong"));
+  }
+};
+
+const sendOtpToUser = (phone, otp) => {
+  return {
+    status: 200,
+    message: "success",
+  };
 };
 
 /*
@@ -870,22 +934,6 @@ const addMinutes = (date, minutes) => {
   return date;
 };
 
-const isDateTimeSmallerThanToday = (date) => {
-  if (!date) return false;
-
-  const now = new Date();
-
-  const nowInGMT6 = new Date(now);
-  nowInGMT6.setUTCHours(now.getUTCHours() + 6);
-
-  const inputDateInGMT6 = new Date(date);
-  inputDateInGMT6.setUTCHours(inputDateInGMT6.getUTCHours() + 6);
-
-  // console.log(nowInGMT6, inputDateInGMT6);
-
-  return inputDateInGMT6 > nowInGMT6;
-};
-
 // Exports //
 
 module.exports = {
@@ -911,4 +959,6 @@ module.exports = {
   createPriceAlerts,
   deletePriceAlerts,
   schedulePriceAlertNotification,
+  verifyPhone,
+  generateOtp,
 };

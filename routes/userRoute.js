@@ -22,6 +22,8 @@ const {
   deletePriceAlerts,
   schedulePriceAlertNotification,
   getNotificationByUserId,
+  verifyPhone,
+  generateOtp,
 } = require("../controllers/userController");
 
 const { checkLogin } = require("../middlewares/authMiddleware");
@@ -71,5 +73,9 @@ router.route("/profile/updateFcmToken/:id").patch(checkLogin, updateFcmToken);
 router.route("/sendNotification/:id").post(checkLogin, sendNotification);
 
 router.route("/notification/:id").get(checkLogin, getNotificationByUserId);
+
+router.route("/verifyPhone").post(checkLogin, verifyPhone);
+
+router.route("/generateOtp").get(checkLogin, generateOtp);
 
 module.exports = router;
