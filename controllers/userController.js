@@ -152,7 +152,7 @@ const verifyPhone = async (req, res, next) => {
         await User.findByIdAndUpdate(req.user._id, {
           $set: {
             isPremium: true,
-            premiumExpireDate: addDaysToToday(14),
+            premiumExpireDate: addDaysToToday(1),
             isFreeTrialUsed: true,
             isVerified: true,
           },
