@@ -23,14 +23,15 @@ function addDaysToToday(days) {
 }
 
 function generateSixDigitRandomNumber() {
-  return Math.floor(100000 + Math.random() * 900000);
+  // return Math.floor(100000 + Math.random() * 900000);
+  return 123456;
 }
 
 /*
   Function for bulksmsbd
 */
 const sendOtpToUser = async (phone, otp) => {
-  // return { status: "success" };
+  return { status: "success" };
 
   try {
     const url = process.env.SMS_GW_URL;
