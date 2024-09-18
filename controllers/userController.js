@@ -17,6 +17,7 @@ const {
   isDateTimeSmallerThanToday,
   addDaysToToday,
   generateSixDigitRandomNumber,
+  sendOtpToUser,
 } = require("../helper/users");
 
 /*
@@ -37,10 +38,10 @@ const signin = async (req, res, next) => {
       const error = createError(404, "User not found");
       return next(error);
     }
-    if (!user.isVerified) {
-      const error = createError(401, "User verification pending");
-      return next(error);
-    }
+    // if (!user.isVerified) {
+    //   const error = createError(401, "User verification pending");
+    //   return next(error);
+    // }
 
     result = await bcrypt.compare(password, user.password);
 
@@ -99,7 +100,6 @@ const signup = async (req, res, next) => {
       email: email.trim(),
       password: encriptPassword(password),
       isActive: true,
-      isVerified: true, // For now //
     });
 
     res.status(201).json({
@@ -118,24 +118,23 @@ const signup = async (req, res, next) => {
 };
 
 const generateOtp = async (req, res, next) => {
-  // try {
-  const otp = generateSixDigitRandomNumber();
+  try {
+    const { _id, phone } = req.user;
+    const otp = generateSixDigitRandomNumber();
 
-  const { _id, phone } = req.user;
+    const { status } = await sendOtpToUser(phone, otp);
 
-  const { status } = sendOtpToUser(phone, otp);
-
-  // console.log(_id, phone, status, otp);
-
-  if (status == 200) {
-    const data = await User.findByIdAndUpdate(_id, {
-      $set: { lastOtp: otp },
-    });
+    if (status == "success") {
+      await User.findByIdAndUpdate(_id, {
+        $set: { lastOtp: otp },
+      });
+      res.status(200).json({ message: "Otp sending success" });
+    } else {
+      res.status(400).json({ message: "Otp sending failed" });
+    }
+  } catch (error) {
+    next(createError(500, "Error occured"));
   }
-  res.status(200).json({ message: "Otp sent" });
-  // } catch (error) {
-  //   next(createError(500, "Error occured"));
-  // }
 };
 
 const verifyPhone = async (req, res, next) => {
@@ -148,8 +147,6 @@ const verifyPhone = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    console.log(user, otp);
-
     if (user.lastOtp === Number(otp)) {
       if (type === "free_trial") {
         await User.findByIdAndUpdate(req.user._id, {
@@ -157,6 +154,13 @@ const verifyPhone = async (req, res, next) => {
             isPremium: true,
             premiumExpireDate: addDaysToToday(14),
             isFreeTrialUsed: true,
+            isVerified: true,
+          },
+        });
+      } else {
+        await User.findByIdAndUpdate(req.user._id, {
+          $set: {
+            isVerified: true,
           },
         });
       }
@@ -167,13 +171,6 @@ const verifyPhone = async (req, res, next) => {
   } catch (error) {
     next(createError(500, "Something went wrong"));
   }
-};
-
-const sendOtpToUser = (phone, otp) => {
-  return {
-    status: 200,
-    message: "success",
-  };
 };
 
 /*

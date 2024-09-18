@@ -6,8 +6,7 @@ const { ObjectId } = require("mongodb");
 const User = require("../models/userModel");
 const Payment = require("../models/paymentsModel");
 const { addDaysToToday } = require("../helper/users");
-
-const isLive = false; //true for live, false for sandbox
+const { IS_PAYMENT_URL_LIVE } = require("../data/constants");
 
 /*
   @api:       GET /api/payment/init/
@@ -15,70 +14,92 @@ const isLive = false; //true for live, false for sandbox
   @access:    private
 */
 const paymentInit = async (req, res) => {
-  const { product } = url.parse(req.url, true).query;
-  const { id, name, phone, email } = req.user;
+  try {
+    const { product, otp } = url.parse(req.url, true).query;
+    const { id, name, phone, email, isVerified, lastOtp } = req.user;
 
-  const productInfo = await Package.findOne({ product });
+    if (!(isVerified && lastOtp == otp)) {
+      return res
+        .status(400)
+        .json({ url: "", message: "Otp verification failed" });
+    }
 
-  const storeId = process.env.SSL_STORE_ID;
-  const storePassword = process.env.SSL_STORE_PASS;
-  const backend = process.env.BACKEND_URL;
+    const customerEmail = !email || email == "" ? "dummy@example.com" : email;
+    const customerName = !name || name == "" ? "User" : name;
 
-  const data = {
-    total_amount: productInfo.currentPrice,
-    currency: "BDT",
-    tran_id: new ObjectId().toString(),
-    success_url: `${backend}/api/payment/success?product=${product}&user=${id}&validity=${productInfo.validityDays}`,
-    fail_url: `${backend}/api/payment/fail`,
-    cancel_url: `${backend}/api/payment/cancel`,
-    ipn_url: `${backend}/api/payment/ipn`,
-    shipping_method: "Online",
-    product_name: productInfo.product,
-    product_category: "Electronic",
-    product_profile: "general",
-    cus_name: name,
-    cus_email: email,
-    cus_add1: "Dhaka",
-    cus_add2: "Dhaka",
-    cus_city: "Dhaka",
-    cus_state: "Dhaka",
-    cus_postcode: "1230",
-    cus_country: "Bangladesh",
-    cus_phone: phone,
-    cus_fax: phone,
-    ship_name: name,
-    ship_add1: "Dhaka",
-    ship_add2: "Dhaka",
-    ship_city: "Dhaka",
-    ship_state: "Dhaka",
-    ship_postcode: 1230,
-    ship_country: "Bangladesh",
-  };
-  // console.log(data);
-  const sslcz = new SSLCommerzPayment(storeId, storePassword, isLive);
+    const productInfo = await Package.findOne({ product });
 
-  sslcz.init(data).then((apiResponse) => {
-    let GatewayPageURL = apiResponse.GatewayPageURL;
-    // res.redirect(GatewayPageURL);
-    console.log("Redirecting to: ", GatewayPageURL);
-    res.status(200).json({ url: GatewayPageURL });
-  });
+    const storeId = process.env.SSL_STORE_ID;
+    const storePassword = process.env.SSL_STORE_PASS;
+    const backend = process.env.BACKEND_URL;
+
+    const data = {
+      total_amount: productInfo.currentPrice,
+      currency: "BDT",
+      tran_id: new ObjectId().toString(),
+      success_url: `${backend}/api/payment/success?product=${product}&user=${id}&validity=${productInfo.validityDays}`,
+      fail_url: `${backend}/api/payment/fail`,
+      cancel_url: `${backend}/api/payment/cancel`,
+      ipn_url: `${backend}/api/payment/ipn`,
+      shipping_method: "Online",
+      product_name: productInfo.product,
+      product_category: "Electronic",
+      product_profile: "general",
+      cus_name: customerName,
+      cus_email: customerEmail,
+      cus_add1: "Dhaka",
+      cus_add2: "Dhaka",
+      cus_city: "Dhaka",
+      cus_state: "Dhaka",
+      cus_postcode: "1230",
+      cus_country: "Bangladesh",
+      cus_phone: phone,
+      cus_fax: phone,
+      ship_name: name,
+      ship_add1: "Dhaka",
+      ship_add2: "Dhaka",
+      ship_city: "Dhaka",
+      ship_state: "Dhaka",
+      ship_postcode: 1230,
+      ship_country: "Bangladesh",
+    };
+
+    const sslcz = new SSLCommerzPayment(
+      storeId,
+      storePassword,
+      IS_PAYMENT_URL_LIVE
+    );
+
+    sslcz.init(data).then((apiResponse) => {
+      if (apiResponse.status === "SUCCESS") {
+        let GatewayPageURL = apiResponse.GatewayPageURL;
+        console.log("Redirecting to: ", GatewayPageURL);
+        res.status(200).json({ url: GatewayPageURL, message: "Success" });
+      } else {
+        res.status(400).json({ url: "", message: "Something went wrong" });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ url: "", message: "Something went wrong" });
+  }
 };
 
 const paymentSuccess = async (req, res) => {
   try {
     const { product, user, validity } = url.parse(req.url, true).query;
-    const { val_id: valId } = req.body;
+    const { val_id } = req.body;
 
     const storeId = process.env.SSL_STORE_ID;
     const storePassword = process.env.SSL_STORE_PASS;
     const data = {
-      val_id: valId,
+      val_id,
     };
-    const sslcz = new SSLCommerzPayment(storeId, storePassword, isLive);
+    const sslcz = new SSLCommerzPayment(
+      storeId,
+      storePassword,
+      IS_PAYMENT_URL_LIVE
+    );
     const validCheckData = await sslcz.validate(data);
-
-    console.log(validCheckData);
 
     const {
       status,
@@ -94,7 +115,7 @@ const paymentSuccess = async (req, res) => {
       await Payment.create({
         status,
         tranId: tran_id,
-        valId,
+        valId: val_id,
         bankTranId: bank_tran_id,
         amount: amount,
         storeAmount: store_amount,
@@ -113,10 +134,6 @@ const paymentSuccess = async (req, res) => {
       res.redirect(
         `${process.env.FRONTEND_URL}/payment-success?tranId=${tran_id}`
       );
-
-      // res
-      //   .status(200)
-      //   .json({ message: "Payment successful", url: "/payment-success" });
     } else {
       res.redirect(`${process.env.FRONTEND_URL}/payment-fail`);
     }
@@ -145,7 +162,11 @@ const getTrnxById = async (req, res) => {
   const data = {
     tran_id: id,
   };
-  const sslcz = new SSLCommerzPayment(storeId, storePassword, isLive);
+  const sslcz = new SSLCommerzPayment(
+    storeId,
+    storePassword,
+    IS_PAYMENT_URL_LIVE
+  );
 
   sslcz.transactionQueryByTransactionId(data).then((data) => {
     //process the response that got from sslcommerz

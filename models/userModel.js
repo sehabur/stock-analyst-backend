@@ -33,12 +33,12 @@ const userSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    premiumExpireDate: {
-      type: Date,
-    },
     isFreeTrialUsed: {
       type: Boolean,
       default: false,
+    },
+    premiumExpireDate: {
+      type: Date,
     },
     lastOtp: {
       type: Number,
@@ -54,12 +54,6 @@ const userSchema = mongoose.Schema(
         type: String,
       },
     ],
-    // priceAlerts: [
-    //   {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "Price_alert",
-    //   },
-    // ],
     fcmToken: {
       type: String,
     },

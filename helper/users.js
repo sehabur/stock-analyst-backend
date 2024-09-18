@@ -1,3 +1,5 @@
+const axios = require("axios");
+
 const isDateTimeSmallerThanToday = (date) => {
   if (!date) return false;
 
@@ -24,8 +26,66 @@ function generateSixDigitRandomNumber() {
   return Math.floor(100000 + Math.random() * 900000);
 }
 
+/*
+  Function for bulksmsbd
+*/
+const sendOtpToUser = async (phone, otp) => {
+  // return { status: "success" };
+
+  try {
+    const url = process.env.SMS_GW_URL;
+    const apiKey = process.env.SMS_GW_API_KEY;
+
+    const msgBody =
+      "Your Stocksupporter Verification OTP Code is " + otp.toString();
+
+    const response = await axios.post(url, {
+      api_key: apiKey,
+      type: "text",
+      number: "88" + phone,
+      senderid: "8809617620371",
+      message: msgBody,
+    });
+
+    if (response?.data?.response_code == 202) {
+      return { status: "success" };
+    } else {
+      return { status: "fail" };
+    }
+  } catch (error) {
+    return { status: "fail" };
+  }
+};
+/*
+  Function for sms.net.bd
+*/
+// const sendOtpToUser = async (phone, otp) => {
+//   try {
+//     const url = process.env.SMS_GW_URL;
+//     const apiKey = process.env.SMS_GW_API_KEY;
+
+//     const msgBody =
+//       "Your Stocksupporter Verification OTP Code is " + otp.toString();
+
+//     const response = await axios.post(url, {
+//       api_key: apiKey,
+//       msg: msgBody,
+//       to: phone,
+//     });
+
+//     if (response?.data?.error == 0) {
+//       return { status: "success" };
+//     } else {
+//       return { status: "fail" };
+//     }
+//   } catch (error) {
+//     return { status: "fail" };
+//   }
+// };
+
 module.exports = {
   isDateTimeSmallerThanToday,
   addDaysToToday,
   generateSixDigitRandomNumber,
+  sendOtpToUser,
 };
