@@ -1,7 +1,7 @@
 const MARKET_CLOSE_HOUR = 8; // UTC hour //
 const MARKET_CLOSE_MINUTE = 30;
 const MARKET_PRE_CLOSE_MINUTE = 20;
-const IS_PAYMENT_URL_LIVE = false; //true for live, false for sandbox
+const IS_PAYMENT_URL_LIVE = true; //true for live, false for sandbox
 
 module.exports = {
   MARKET_CLOSE_HOUR,
