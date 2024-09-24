@@ -335,9 +335,7 @@ function calculateRsiLastValue(prices, period = 14) {
     rsi.push(100 - 100 / (1 + rs));
   }
 
-  // return Math.round(rsi[rsi.length - 1] * 100) / 100;
-
-  return rsi;
+  return Math.round(rsi[rsi.length - 1] * 100) / 100;
 }
 
 // function calculateRsiLastValue(prices, period = 14) {
