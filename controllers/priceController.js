@@ -1998,7 +1998,7 @@ const stockDetails = async (req, res, next) => {
   }
 
   const ltp = latestPrice.ltp;
-  const ycp = latestPrice.ycp;
+  const ycp = Math.floor(latestPrice.ycp);
 
   const circuitUpRange = circuitUpMoveRange.find(
     (item) => ycp >= item.min && ycp <= item.max
