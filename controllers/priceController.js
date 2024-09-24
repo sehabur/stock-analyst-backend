@@ -2591,7 +2591,7 @@ const indexMinuteData = async (req, res, next) => {
       },
     },
     {
-      $limit: 20,
+      $limit: 320,
     },
     {
       $sort: {
