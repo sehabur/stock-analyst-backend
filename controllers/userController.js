@@ -106,9 +106,10 @@ const signup = async (req, res, next) => {
       message: "Account creation successful",
       user: {
         ...newUser._doc,
-        password: "",
+        password: null,
         token: generateToken(newUser._id),
         isLoggedIn: true,
+        isPremiumEligible: false,
       },
     });
   } catch (err) {
@@ -720,7 +721,12 @@ const schedulePriceAlertNotification = async (req, res, next) => {
           targetPrice +
           ")";
 
-        const { status } = await sendNotificationToFcmToken(user, title, body);
+        const { status } = await sendNotificationToFcmToken(
+          user,
+          title,
+          body,
+          tradingCode
+        );
 
         if (status == 200) {
           await PriceAlert.findByIdAndUpdate(_id, {

@@ -8,6 +8,9 @@ const notificationSchema = mongoose.Schema(
     body: {
       type: String,
     },
+    tradingCode: {
+      type: String,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

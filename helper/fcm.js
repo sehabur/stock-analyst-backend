@@ -7,7 +7,7 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-const sendNotificationToFcmToken = async (userId, title, body) => {
+const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
   try {
     const user = await User.findById(userId);
 
@@ -31,6 +31,7 @@ const sendNotificationToFcmToken = async (userId, title, body) => {
     await Notification.create({
       title,
       body,
+      tradingCode,
       user: userId,
       fcmToken: user.fcmToken,
       firebaseResponse: response || "",

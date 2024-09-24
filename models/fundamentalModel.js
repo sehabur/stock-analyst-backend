@@ -59,6 +59,8 @@ const fundamentalSchema = mongoose.Schema(
 
     screener: { type: Object },
 
+    technicals: { type: Object },
+
     isActive: { type: Boolean },
   },
   {

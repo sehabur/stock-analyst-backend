@@ -76,6 +76,7 @@ function calculateStochasticK(data, period = 14, smoothK = 3, smoothD = 3) {
     let periodPrices = data.slice(i - period + 1, i + 1);
     let high = Math.max(...periodPrices.map((d) => d.high));
     let low = Math.min(...periodPrices.map((d) => d.low));
+
     let currentClose = data[i].close;
     let k = ((currentClose - low) / (high - low)) * 100;
     stochK.push(k);
@@ -359,8 +360,12 @@ function calculateStochasticKLastValue(
     let periodPrices = data.slice(i - period + 1, i + 1);
     let high = Math.max(...periodPrices.map((d) => d.high));
     let low = Math.min(...periodPrices.map((d) => d.low));
+
     let currentClose = data[i].close;
     let k = ((currentClose - low) / (high - low)) * 100;
+
+    console.log(currentClose, high, low, k);
+
     stochK.push(k);
   }
 
@@ -372,11 +377,15 @@ function calculateStochasticKLastValue(
 
 function calculateAdxLastValue(highs, lows, closes, period = 14) {
   const tr = calculateTrueRange(highs, lows, closes);
+
   const { plusDM, minusDM } = calculateDirectionalMovement(highs, lows);
 
   const smoothedTR = calculateSmoothedValues(tr, period);
+
   const smoothedPlusDM = calculateSmoothedValues(plusDM, period);
   const smoothedMinusDM = calculateSmoothedValues(minusDM, period);
+
+  console.log(smoothedTR);
 
   const plusDI = smoothedPlusDM.map(
     (val, index) => (val / smoothedTR[index]) * 100

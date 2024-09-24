@@ -1503,6 +1503,58 @@ const dailySectorPrice = async (req, res, next) => {
 const technicals = async (req, res, next) => {
   const tradingCode = req.params.code;
 
+  const data = await Fundamental.findOne({ tradingCode }).select({
+    technicals: 1,
+  });
+
+  const {
+    sma10,
+    sma20,
+    sma30,
+    sma50,
+    sma100,
+    sma200,
+    ema10,
+    ema20,
+    ema30,
+    ema50,
+    ema100,
+    ema200,
+  } = data.technicals.movingAverages;
+
+  const { rsi, stoch, adx, williamR, mfi, macd } = data.technicals.oscillators;
+
+  res.status(200).json({
+    sma10,
+    sma20,
+    sma30,
+    sma50,
+    sma100,
+    sma200,
+    ema10,
+    ema20,
+    ema30,
+    ema50,
+    ema100,
+    ema200,
+    rsi,
+    stoch,
+    adx,
+    williamR,
+    mfi,
+    macd,
+    pivots: data.technicals.pivots,
+  });
+};
+
+/*
+  @api:       GET /api/prices/technical/stock/:code
+  @desc:      get stock technicals
+  @access:    public
+*/
+const technicalsOldVersion = async (req, res, next) => {
+  const tradingCode = req.params.code;
+
   const queryLimit = 500;
 
   const dailyPrice = await DailyPrice.aggregate([
@@ -2491,7 +2543,8 @@ const indexDetails = async (req, res, next) => {
   @access:    public
 */
 const indexMinuteData = async (req, res, next) => {
-  const { minuteDataUpdateDate, dataInsertionEnable } = await Setting.findOne();
+  const { minuteDataUpdateDate, dailyIndexUpdateDate, dataInsertionEnable } =
+    await Setting.findOne();
 
   const index = await MinuteIndex.aggregate([
     {
@@ -2525,9 +2578,68 @@ const indexMinuteData = async (req, res, next) => {
     },
   ]);
 
+  const tradingCode = "00DSEX";
+  const dailyIndex = await DailyPrice.aggregate([
+    {
+      $match: {
+        tradingCode,
+      },
+    },
+    {
+      $sort: {
+        date: -1,
+      },
+    },
+    {
+      $limit: 20,
+    },
+    {
+      $sort: {
+        date: 1,
+      },
+    },
+    {
+      $unionWith: {
+        coll: "index_day_minute_values",
+        pipeline: [
+          {
+            $match: {
+              tradingCode: tradingCode,
+              date: {
+                $gt: dailyIndexUpdateDate,
+              },
+            },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              close: { $last: "$index" },
+            },
+          },
+        ],
+      },
+    },
+    {
+      $project: {
+        date: 1,
+        close: 1,
+      },
+    },
+  ]);
+
+  const prices = dailyIndex.map((item) => item.close);
+
+  const rsi = calculateRsiLastValue(prices);
+
   const marketOpenStatus = await getMarketOpenStatus();
 
-  res.status(200).json({ ...index[0], marketOpenStatus });
+  res.status(200).json({ ...index[0], rsi, marketOpenStatus });
 };
 
 /*
@@ -3600,6 +3712,20 @@ const screener = async (req, res, next) => {
             2,
           ],
         },
+        authCap: {
+          $cond: [
+            { $eq: ["$authCap", 0] },
+            "-",
+            {
+              $round: [
+                {
+                  $divide: ["$authCap", 10],
+                },
+                2,
+              ],
+            },
+          ],
+        },
         pe: {
           $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
         },
@@ -3700,8 +3826,13 @@ const screener = async (req, res, next) => {
         },
 
         beta: "$technicals.beta",
-        rsi14: "$technicals.oscillators.rsi14",
         patterns: "$technicals.patterns",
+        rsi: "$technicals.oscillators.rsi",
+        adx: "$technicals.oscillators.adx",
+        stoch: "$technicals.oscillators.stoch",
+        macd: "$technicals.oscillators.macd",
+        williamR: "$technicals.oscillators.williamR",
+        mfi: "$technicals.oscillators.mfi",
         candlestick: "$technicals.candlestick.value",
         sma20: "$technicals.movingAverages.sma20",
         sma50: "$technicals.movingAverages.sma50",
@@ -3736,7 +3867,7 @@ const screener = async (req, res, next) => {
 const topFinancials = async (req, res, next) => {
   const { setlimit } = url.parse(req.url, true).query;
 
-  const limit = setlimit ? Number(setlimit) : 8;
+  const limit = setlimit ? Number(setlimit) : 20;
 
   const data = await Fundamental.aggregate([
     {
@@ -3894,6 +4025,13 @@ const topFinancials = async (req, res, next) => {
           },
         ],
         roe: [
+          {
+            $match: {
+              roe: {
+                $lt: 10000,
+              },
+            },
+          },
           {
             $sort: {
               roe: -1,
