@@ -3,22 +3,36 @@ const createError = require("http-errors");
 const StudyTemplate = require("../models/studyTemplateModel");
 const Chart = require("../models/chartModel");
 const mongoose = require("mongoose");
+const { checkIsPremiumEligible } = require("../helper/users");
 
 /*
-  @api:       POST /api/users/signin/
-  @desc:      user signin
-  @access:    public
+  @api:       POST /api/tvcharts/getStudyTemplate/
+  @desc:      get all Study Template
+  @access:    private
 */
 const getStudyTemplate = async (req, res) => {
   const { getType, name } = url.parse(req.url, true).query;
 
+  const { id, isPremium, premiumExpireDate } = req.user;
+
+  const isPremiumEligible = checkIsPremiumEligible(
+    isPremium,
+    premiumExpireDate
+  );
+
   let data;
   if (getType === "all") {
-    data = await StudyTemplate.find({
-      $or: [{ user: req.user.id }, { isPublic: true }],
-    });
+    if (isPremiumEligible) {
+      data = await StudyTemplate.find({
+        $or: [{ user: id }, { isPublic: true, isPremium: true }],
+      });
+    } else {
+      data = await StudyTemplate.find({
+        $or: [{ user: id }, { isPublic: true, isPremium: false }],
+      });
+    }
   } else if (getType === "content") {
-    data = await StudyTemplate.findOne({ user: req.user.id, name }).select(
+    data = await StudyTemplate.findOne({ name }).select(
       "name content meta_info -_id"
     );
   }
@@ -27,9 +41,7 @@ const getStudyTemplate = async (req, res) => {
 
 const saveStudyTemplate = async (req, res) => {
   const body = req.body;
-
   const data = await StudyTemplate.create({ ...body, user: req.user.id });
-
   return res.status(201).json(data);
 };
 

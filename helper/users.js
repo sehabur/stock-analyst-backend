@@ -14,6 +14,10 @@ const isDateTimeSmallerThanToday = (date) => {
   return inputDateInGMT6 > nowInGMT6;
 };
 
+const checkIsPremiumEligible = (isPremium, premiumExpireDate) => {
+  return isPremium && isDateTimeSmallerThanToday(premiumExpireDate);
+};
+
 function addDaysToToday(days) {
   const today = new Date();
   const resultDate = new Date(today);
@@ -85,7 +89,8 @@ const sendOtpToUser = async (phone, otp) => {
 // };
 
 module.exports = {
-  isDateTimeSmallerThanToday,
+  // isDateTimeSmallerThanToday,
+  checkIsPremiumEligible,
   addDaysToToday,
   generateSixDigitRandomNumber,
   sendOtpToUser,

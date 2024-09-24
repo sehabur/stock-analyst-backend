@@ -14,10 +14,10 @@ const PriceAlert = require("../models/priceAlertModel");
 const { sendNotificationToFcmToken } = require("../helper/fcm");
 const Notification = require("../models/notificationModel");
 const {
-  isDateTimeSmallerThanToday,
   addDaysToToday,
   generateSixDigitRandomNumber,
   sendOtpToUser,
+  checkIsPremiumEligible,
 } = require("../helper/users");
 
 /*
@@ -50,8 +50,10 @@ const signin = async (req, res, next) => {
       return next(error);
     }
 
-    const isPremiumEligible =
-      user.isPremium && isDateTimeSmallerThanToday(user.premiumExpireDate);
+    const isPremiumEligible = checkIsPremiumEligible(
+      user.isPremium,
+      user.premiumExpireDate
+    );
 
     res.status(200).json({
       message: "Login attempt successful",
@@ -187,8 +189,10 @@ const getUserProfileById = async (req, res, next) => {
       return next(createError(404, "User not found"));
     }
 
-    const isPremiumEligible =
-      user.isPremium && isDateTimeSmallerThanToday(user.premiumExpireDate);
+    const isPremiumEligible = checkIsPremiumEligible(
+      user.isPremium,
+      user.premiumExpireDate
+    );
 
     if (user) {
       res.status(200).json({

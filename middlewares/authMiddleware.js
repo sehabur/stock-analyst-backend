@@ -4,6 +4,8 @@ const createError = require("http-errors");
 
 const User = require("../models/userModel");
 
+const { checkIsPremiumEligible } = require("../helper/users");
+
 const checkLogin = async (req, res, next) => {
   try {
     if (
@@ -38,25 +40,28 @@ const checkLogin = async (req, res, next) => {
 
 const checkPremium = async (req, res, next) => {
   try {
-    const user = req.user;
+    const { isPremium, premiumExpireDate } = req.user;
 
-    if (user?.isPremium) {
+    const isPremiumEligible = checkIsPremiumEligible(
+      isPremium,
+      premiumExpireDate
+    );
+
+    if (isPremiumEligible) {
       return next();
     } else {
-      const error = createError(401, "Access denied");
-      return next(error);
+      return next(createError(401, "Access denied"));
     }
   } catch (err) {
-    const error = createError(401, err.message);
-    return next(error);
+    return next(createError(401, err.message));
   }
 };
 
 const checkAdmin = async (req, res, next) => {
   try {
     const user = req.user;
-    console.log(user);
-    if (user?.isPremium) {
+
+    if (user.isAdmin) {
       return next();
     } else {
       const error = createError(401, "Access denied");
