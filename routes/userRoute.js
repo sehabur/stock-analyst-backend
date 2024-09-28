@@ -22,6 +22,7 @@ const {
   deletePriceAlerts,
   schedulePriceAlertNotification,
   getNotificationByUserId,
+  resetNewNotifications,
   verifyPhone,
   generateOtp,
 } = require("../controllers/userController");
@@ -73,6 +74,8 @@ router.route("/profile/updateFcmToken/:id").patch(checkLogin, updateFcmToken);
 router.route("/sendNotification/:id").post(checkLogin, sendNotification);
 
 router.route("/notification/:id").get(checkLogin, getNotificationByUserId);
+
+router.route("/notification/resetNew").patch(checkLogin, resetNewNotifications);
 
 router.route("/verifyPhone").post(checkLogin, verifyPhone);
 

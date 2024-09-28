@@ -11,6 +11,9 @@ const notificationSchema = mongoose.Schema(
     tradingCode: {
       type: String,
     },
+    isNew: {
+      type: Boolean,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -18,12 +21,12 @@ const notificationSchema = mongoose.Schema(
     fcmToken: {
       type: String,
     },
-    url: {
-      type: String,
-    },
-    image: {
-      type: String,
-    },
+    // url: {
+    //   type: String,
+    // },
+    // image: {
+    //   type: String,
+    // },
     firebaseResponse: {
       type: String,
     },

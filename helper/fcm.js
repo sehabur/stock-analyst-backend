@@ -36,6 +36,7 @@ const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
       fcmToken: user.fcmToken,
       firebaseResponse: response || "",
       deliveryTime: new Date(),
+      isNew: true,
     });
 
     return {

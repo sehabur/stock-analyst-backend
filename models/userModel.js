@@ -57,6 +57,9 @@ const userSchema = mongoose.Schema(
     fcmToken: {
       type: String,
     },
+    loggedInDeviceCount: {
+      type: Number,
+    },
   },
   {
     timestamps: true,

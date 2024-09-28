@@ -46,14 +46,22 @@ const signin = async (req, res, next) => {
     result = await bcrypt.compare(password, user.password);
 
     if (!result) {
-      const error = createError(401, "Password incorrect");
-      return next(error);
+      return next(createError(401, "Password incorrect"));
     }
 
     const isPremiumEligible = checkIsPremiumEligible(
       user.isPremium,
       user.premiumExpireDate
     );
+
+    // user.loggedInDeviceCount = user.loggedInDeviceCount || 1 + 1;
+
+    // await user.save();
+
+    // await User.findByIdAndUpdate(
+    //   { phone: phoneNumber },
+    //   { $inc: { loggedInDeviceCount: 1 } }
+    // );
 
     res.status(200).json({
       message: "Login attempt successful",
@@ -66,8 +74,7 @@ const signin = async (req, res, next) => {
       },
     });
   } catch (err) {
-    const error = createError(500, "Unknown Error");
-    next(error);
+    next(createError(500, "Unknown Error"));
   }
 };
 
@@ -102,6 +109,7 @@ const signup = async (req, res, next) => {
       email: email.trim(),
       password: encriptPassword(password),
       isActive: true,
+      loggedInDeviceCount: 1,
     });
 
     res.status(201).json({
@@ -185,6 +193,11 @@ const getUserProfileById = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select("-password -__v");
 
+    const newNotificationCount = await Notification.find({
+      user: req.params.id,
+      isNew: true,
+    }).count();
+
     if (!user) {
       return next(createError(404, "User not found"));
     }
@@ -197,18 +210,42 @@ const getUserProfileById = async (req, res, next) => {
     if (user) {
       res.status(200).json({
         ...user._doc,
+        newNotificationCount,
         isLoggedIn: true,
         isPremiumEligible,
       });
     } else {
-      const error = createError(404, "User not found");
-      next(error);
+      next(createError(404, "User not found"));
     }
   } catch (err) {
-    const error = createError(500, "Error occured");
-    next(error);
+    next(createError(500, "Error occured"));
   }
 };
+
+/*
+  @api:       PATCH /api/users/notification/resetNew
+  @desc:      get user profile of a specific user
+  @access:    private
+*/
+const resetNewNotifications = async (req, res, next) => {
+  try {
+    const notif = await Notification.updateMany(
+      {
+        user: req.user.id,
+        isNew: true,
+      },
+      { isNew: false }
+    );
+    res.status(200).json({
+      status: "success",
+      message: "Reset successful",
+      notif,
+    });
+  } catch (error) {
+    next(createError(500, "Error occured"));
+  }
+};
+
 /*
   @api:       GET /api/users/notification/:id
   @desc:      get user profile of a specific user
@@ -659,7 +696,9 @@ const createSellRequest = async (req, res, next) => {
 */
 const getPriceAlertsByUserId = async (req, res, next) => {
   try {
-    const alerts = await PriceAlert.find({ user: req.params.id });
+    const alerts = await PriceAlert.find({ user: req.params.id }).sort({
+      createdAt: -1,
+    });
     res.status(200).json(alerts);
   } catch (err) {
     const error = createError(500, "Error occured");
@@ -715,6 +754,7 @@ const schedulePriceAlertNotification = async (req, res, next) => {
         (type == "above" && currentPrice >= targetPrice) ||
         (type == "below" && currentPrice <= targetPrice)
       ) {
+        console.log(alert);
         const title = tradingCode + " Price Alert";
         const body =
           "Latest trading price is now BDT " +
@@ -949,6 +989,7 @@ module.exports = {
   getUserProfileById,
   updateUserProfile,
   sendNotification,
+  resetNewNotifications,
   updateFcmToken,
   addFavoriteItem,
   // getFavoritesByUserId,
