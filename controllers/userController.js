@@ -27,10 +27,10 @@ const {
 */
 const signin = async (req, res, next) => {
   try {
-    const { phone: phoneNumber, password } = req.body;
+    const { phone, password } = req.body;
 
     const user = await User.findOne({
-      phone: phoneNumber,
+      phone,
       isActive: true,
     });
 
@@ -43,16 +43,16 @@ const signin = async (req, res, next) => {
     //   return next(error);
     // }
 
-    result = await bcrypt.compare(password, user.password);
+    const result = await bcrypt.compare(password, user.password);
 
     if (!result) {
       return next(createError(401, "Password incorrect"));
     }
 
-    const isPremiumEligible = checkIsPremiumEligible(
-      user.isPremium,
-      user.premiumExpireDate
-    );
+    const newNotificationCount = await Notification.find({
+      user: user._id,
+      isNew: true,
+    }).count();
 
     // user.loggedInDeviceCount = user.loggedInDeviceCount || 1 + 1;
 
@@ -67,10 +67,14 @@ const signin = async (req, res, next) => {
       message: "Login attempt successful",
       user: {
         ...user._doc,
+        newNotificationCount,
         password: null,
         token: generateToken(user._id),
         isLoggedIn: true,
-        isPremiumEligible,
+        isPremiumEligible: checkIsPremiumEligible(
+          user.isPremium,
+          user.premiumExpireDate
+        ),
       },
     });
   } catch (err) {
@@ -202,21 +206,15 @@ const getUserProfileById = async (req, res, next) => {
       return next(createError(404, "User not found"));
     }
 
-    const isPremiumEligible = checkIsPremiumEligible(
-      user.isPremium,
-      user.premiumExpireDate
-    );
-
-    if (user) {
-      res.status(200).json({
-        ...user._doc,
-        newNotificationCount,
-        isLoggedIn: true,
-        isPremiumEligible,
-      });
-    } else {
-      next(createError(404, "User not found"));
-    }
+    res.status(200).json({
+      ...user._doc,
+      newNotificationCount,
+      isLoggedIn: true,
+      isPremiumEligible: checkIsPremiumEligible(
+        user.isPremium,
+        user.premiumExpireDate
+      ),
+    });
   } catch (err) {
     next(createError(500, "Error occured"));
   }
@@ -754,7 +752,6 @@ const schedulePriceAlertNotification = async (req, res, next) => {
         (type == "above" && currentPrice >= targetPrice) ||
         (type == "below" && currentPrice <= targetPrice)
       ) {
-        console.log(alert);
         const title = tradingCode + " Price Alert";
         const body =
           "Latest trading price is now BDT " +
@@ -779,7 +776,12 @@ const schedulePriceAlertNotification = async (req, res, next) => {
         }
       }
     }
-    res.status(200).json({ message: "Delivered" });
+    res
+      .status(200)
+      .json({
+        status: "success",
+        message: "All message delivered successfully",
+      });
   } catch (err) {
     const error = createError(500, "Error occured");
     next(error);

@@ -11,7 +11,7 @@ const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
   try {
     const user = await User.findById(userId);
 
-    if (!user) {
+    if (!user?.fcmToken) {
       return {
         status: 404,
         message: "User not found",
@@ -19,11 +19,39 @@ const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
     }
 
     const payload = {
+      token: user.fcmToken,
       notification: {
         title: title,
         body: body,
       },
-      token: user.fcmToken || "",
+      android: {
+        ttl: 86400,
+        notification: {
+          priority: "high", // Notification priority (high, low, max, min)
+          // click_action: "OPEN_ACTIVITY_1",
+          // icon: "ic_launcher", // This refers to an icon in res/drawable
+          // color: "#f5f7f9", // Notification accent color (in #rrggbb format)
+          // sound: "default", // Custom sound or 'default'
+          // notification_count: 1, // The number of notifications displayed on the badge
+          // visibility: "public", // Notification visibility (public, private, secret)
+          // vibrate_timings: ["0.5s", "1s"], // Vibration pattern in seconds
+        },
+      },
+      // apns: {
+      //   headers: {
+      //     "apns-priority": "1",
+      //   },
+      //   payload: {
+      //     aps: {
+      //       category: "NEW_MESSAGE_CATEGORY",
+      //     },
+      //   },
+      // },
+      // webpush: {
+      //   headers: {
+      //     TTL: "86400",
+      //   },
+      // },
     };
 
     const response = await admin.messaging().send(payload);
