@@ -15,7 +15,7 @@ const { IS_PAYMENT_URL_LIVE } = require("../data/constants");
 */
 const paymentInit = async (req, res) => {
   try {
-    const { product, otp } = url.parse(req.url, true).query;
+    const { product, otp, platform } = url.parse(req.url, true).query;
     const { id, name, phone, email, isVerified, lastOtp } = req.user;
 
     if (!(isVerified && lastOtp == otp)) {
@@ -37,7 +37,7 @@ const paymentInit = async (req, res) => {
       total_amount: productInfo.currentPrice,
       currency: "BDT",
       tran_id: new ObjectId().toString(),
-      success_url: `${backend}/api/payment/success?product=${product}&user=${id}&validity=${productInfo.validityDays}`,
+      success_url: `${backend}/api/payment/success?product=${product}&user=${id}&validity=${productInfo.validityDays}&platform=${platform}`,
       fail_url: `${backend}/api/payment/fail`,
       cancel_url: `${backend}/api/payment/cancel`,
       ipn_url: `${backend}/api/payment/ipn`,
@@ -86,7 +86,10 @@ const paymentInit = async (req, res) => {
 
 const paymentSuccess = async (req, res) => {
   try {
-    const { product, user, validity } = url.parse(req.url, true).query;
+    const { product, user, validity, platform } = url.parse(
+      req.url,
+      true
+    ).query;
     const { val_id } = req.body;
 
     const storeId = process.env.SSL_STORE_ID;
@@ -132,7 +135,7 @@ const paymentSuccess = async (req, res) => {
       });
 
       res.redirect(
-        `${process.env.FRONTEND_URL}/payment-success?tranId=${tran_id}`
+        `${process.env.FRONTEND_URL}/payment-success?tranId=${tran_id}&platform=${platform}`
       );
     } else {
       res.redirect(`${process.env.FRONTEND_URL}/payment-fail`);
