@@ -17,7 +17,10 @@ const haltStatusSchema = mongoose.Schema(
     initMarketDepthStatus: {
       type: String,
     },
-    circuitLimitReached: {
+    upperCircuitLimitReached: {
+      type: Boolean,
+    },
+    lowerCircuitLimitReached: {
       type: Boolean,
     },
     totalBuyVolume: {

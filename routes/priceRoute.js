@@ -6,6 +6,7 @@ const {
   getAllStocks,
   getStocksList,
   getIpoList,
+  getMarketStatus,
   latestPrice,
   indexMover,
   latestPricesBySearch,
@@ -45,6 +46,8 @@ router.route("/allStockBeta").get(allStockBeta);
 router.route("/getStocksList").get(getStocksList);
 
 router.route("/getAllStocks").get(getAllStocks);
+
+router.route("/getMarketStatus").get(getMarketStatus);
 
 router.route("/ipo").get(getIpoList);
 

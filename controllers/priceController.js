@@ -28,7 +28,7 @@ const {
   dsexShares,
 } = require("../data/dse");
 
-const { getMarketOpenStatus } = require("../helper/price");
+const { marketStatusHelper } = require("../helper/price");
 
 const {
   calculateSmaLastValue,
@@ -41,9 +41,6 @@ const {
   calculateMoneyFlowIndexLastValue,
   calculatePivotPoints,
 } = require("../helper/movingAverage");
-
-const { pipeline } = require("stream");
-const { types } = require("util");
 
 /*
   @api:       GET /api/prices/getSymbolTvchart/
@@ -134,53 +131,99 @@ const getBarsTvchart = async (req, res) => {
       ]);
 
       if (new Date() < new Date(toTime * 1000)) {
-        // console.log("first");
-        const { dailyPriceUpdateDate } = await Setting.findOne().select(
-          "dailyPriceUpdateDate"
-        );
-
-        const todayPrices = await DayMinutePrice.aggregate([
-          {
-            $match: {
-              tradingCode: symbol,
-              date: {
-                $gt: dailyPriceUpdateDate,
+        const { dailyPriceUpdateDate, dailyIndexUpdateDate } =
+          await Setting.findOne().select(
+            "dailyPriceUpdateDate dailyIndexUpdateDate"
+          );
+        todayPrices = [];
+        if (symbolType == "stock") {
+          todayPrices = await DayMinutePrice.aggregate([
+            {
+              $match: {
+                tradingCode: symbol,
+                date: {
+                  $gt: dailyPriceUpdateDate,
+                },
+                ltp: { $ne: 0 },
               },
-              ltp: { $ne: 0 },
             },
-          },
-          {
-            $sort: {
-              time: 1,
+            {
+              $sort: {
+                time: 1,
+              },
             },
-          },
-          {
-            $group: {
-              _id: null,
-              date: { $first: "$date" },
-              open: { $first: "$ltp" },
-              high: { $last: "$high" },
-              low: { $last: "$low" },
-              close: { $last: "$ltp" },
-              ltp: { $last: "$ltp" },
-              ycp: { $first: "$ycp" },
-              volume: { $last: "$volume" },
+            {
+              $group: {
+                _id: null,
+                date: { $first: "$date" },
+                open: { $first: "$ltp" },
+                high: { $last: "$high" },
+                low: { $last: "$low" },
+                close: { $last: "$ltp" },
+                ltp: { $last: "$ltp" },
+                ycp: { $first: "$ycp" },
+                volume: { $last: "$volume" },
+              },
             },
-          },
-          {
-            $project: {
-              _id: 0,
-              time: { $toLong: "$date" },
-              open: 1,
-              close: 1,
-              high: 1,
-              low: 1,
-              ltp: 1,
-              ycp: 1,
-              volume: 1,
+            {
+              $project: {
+                _id: 0,
+                time: { $toLong: "$date" },
+                open: 1,
+                close: 1,
+                high: 1,
+                low: 1,
+                ltp: 1,
+                ycp: 1,
+                volume: 1,
+              },
             },
-          },
-        ]);
+          ]);
+        } else if (symbolType == "index") {
+          todayPrices = await DayMinuteIndex.aggregate([
+            {
+              $match: {
+                tradingCode: symbol,
+                date: {
+                  $gt: dailyIndexUpdateDate,
+                },
+                ltp: { $ne: 0 },
+              },
+            },
+            {
+              $sort: {
+                time: 1,
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                date: { $first: "$date" },
+                open: { $first: "$ltp" },
+                high: { $last: "$high" },
+                low: { $last: "$low" },
+                close: { $last: "$ltp" },
+                ltp: { $last: "$ltp" },
+                ycp: { $first: "$ycp" },
+                volume: { $last: "$volume" },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                time: { $toLong: "$date" },
+                open: 1,
+                close: 1,
+                high: 1,
+                low: 1,
+                ltp: 1,
+                ycp: 1,
+                volume: 1,
+              },
+            },
+          ]);
+        }
+
         latestPrice = formatCandleChartData([...prices, ...todayPrices]);
       } else {
         latestPrice = formatCandleChartData(prices);
@@ -405,7 +448,117 @@ const getBarsTvchart = async (req, res) => {
           },
         },
       ]);
-      latestPrice = sectorPrices;
+
+      if (new Date() < new Date(toTime * 1000)) {
+        const { dailySectorUpdateDate, minuteDataUpdateDate } =
+          await Setting.findOne().select(
+            "dailySectorUpdateDate minuteDataUpdateDate"
+          );
+
+        const todayPrices = await LatestPrice.aggregate([
+          {
+            $match: {
+              date: {
+                $gt: dailySectorUpdateDate,
+              },
+            },
+          },
+          {
+            $addFields: {
+              ltp: {
+                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              },
+            },
+          },
+          {
+            $unionWith: {
+              coll: "inactive_stocks",
+              pipeline: [
+                {
+                  $addFields: {
+                    date: minuteDataUpdateDate,
+                    ltp: "$price",
+                    high: "$price",
+                    low: "$price",
+                    close: "$price",
+                    open: "$price",
+                    ycp: "$price",
+                    trade: 0,
+                    value: 0,
+                    volume: 0,
+                  },
+                },
+                {
+                  $match: {
+                    date: {
+                      $gt: dailySectorUpdateDate,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $lookup: {
+              from: "fundamentals",
+              localField: "tradingCode",
+              foreignField: "tradingCode",
+              as: "fundamentals",
+            },
+          },
+          { $unwind: "$fundamentals" },
+          {
+            $match: {
+              "fundamentals.sector": sector,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              ltp: { $avg: "$ltp" },
+              ycp: { $avg: "$ycp" },
+              high: { $avg: "$high" },
+              low: { $avg: "$low" },
+              open: { $avg: "$ycp" },
+              close: { $avg: "$close" },
+              trade: { $sum: "$trade" },
+              value: { $sum: "$value" },
+              volume: { $sum: "$volume" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              date: 1,
+              sector: sector,
+              ltp: { $round: ["$ltp", 2] },
+              ycp: { $round: ["$ycp", 2] },
+              high: { $round: ["$high", 2] },
+              low: { $round: ["$low", 2] },
+              close: { $round: ["$close", 2] },
+              open: { $round: ["$open", 2] },
+              change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
+              percentChange: {
+                $round: [
+                  {
+                    $multiply: [
+                      { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+                      100,
+                    ],
+                  },
+                  2,
+                ],
+              },
+              trade: 1,
+              value: 1,
+              volume: 1,
+            },
+          },
+        ]);
+      }
+
+      latestPrice = [...sectorPrices, ...todayPrices];
 
       console.log(sectorPrices);
     }
@@ -422,6 +575,58 @@ const getBarsTvchart = async (req, res) => {
     };
     res.status(400).json(data);
   }
+};
+
+/*
+  @api:       GET /api/prices/getMarketOpenStatus
+  @desc:      get latest open/close and time updates of market
+  @access:    public
+*/
+const getMarketStatus = async (req, res, next) => {
+  const {
+    dataInsertionEnable,
+    ipoUpdateTime,
+    minuteDataUpdateTime,
+    dailyBlockTrUpdateDate,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+    dataFetchStartHour,
+    dataFetchStartMinute,
+    dataFetchEndHour,
+    dataFetchEndMinute,
+  } = await Setting.findOne();
+
+  const { statusText, isOpen } = await marketStatusHelper(
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute
+  );
+
+  res.status(200).json({
+    statusText,
+    isOpen,
+    ipoUpdateTime,
+    minuteDataUpdateTime,
+    dailyBlockTrUpdateDate,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+    dataFetchStartHour,
+    dataFetchStartMinute,
+    dataFetchEndHour,
+    dataFetchEndMinute,
+  });
 };
 
 /*
@@ -468,7 +673,25 @@ const getIpoList = async (req, res, next) => {
   @access:    public
 */
 const getIndexInfo = async (req, res, next) => {
-  const marketOpenStatus = await getMarketOpenStatus();
+  const {
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+  } = await Setting.findOne();
+
+  const marketOpenStatus = await marketStatusHelper(
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute
+  );
 
   const index = await DayMinuteIndex.aggregate([
     {
@@ -489,7 +712,7 @@ const getIndexInfo = async (req, res, next) => {
   res.status(200).json({
     Status: "success",
     Data: {
-      marketOpenStatus,
+      marketOpenStatus: marketOpenStatus.statusText,
       indexLatestData: index[0],
     },
   });
@@ -635,6 +858,13 @@ const latestPrice = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "halt_shares",
+        pipeline: [
+          {
+            $match: {
+              date: minuteDataUpdateDate,
+            },
+          },
+        ],
       },
     },
     { $unwind: { path: "$halt_shares", preserveNullAndEmptyArrays: true } },
@@ -644,6 +874,7 @@ const latestPrice = async (req, res, next) => {
         category: "$fundamentals.category",
         companyName: "$fundamentals.companyName",
         type: "$fundamentals.type",
+        recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
       },
     },
@@ -864,6 +1095,7 @@ const indexMover = async (req, res, next) => {
   const loser = movers
     .filter((item) => item.indexMove < 0)
     .sort((a, b) => a.indexMove - b.indexMove);
+
   const gainer = movers
     .filter((item) => item.indexMove > 0)
     .sort((a, b) => b.indexMove - a.indexMove);
@@ -1678,8 +1910,17 @@ const stockDetails = async (req, res, next) => {
 
   const queryLimit = period ? Number(period) : 750; // default to 3 year //
 
-  const { dailyPriceUpdateDate, minuteDataUpdateDate } =
-    await Setting.findOne().select("dailyPriceUpdateDate minuteDataUpdateDate");
+  const {
+    dailyPriceUpdateDate,
+    minuteDataUpdateDate,
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+  } = await Setting.findOne();
 
   let minutePrice = await DayMinutePrice.aggregate([
     {
@@ -1998,19 +2239,11 @@ const stockDetails = async (req, res, next) => {
   }
 
   const ltp = latestPrice.ltp;
-  const ycp = Math.floor(latestPrice.ycp);
+  const ycp = latestPrice.ycp;
 
-  const circuitUpRange = circuitUpMoveRange.find(
-    (item) => ycp >= item.min && ycp <= item.max
-  ).value;
+  const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
 
-  const circuitDownRange = circuitDownMoveRange.find(
-    (item) => ycp >= item.min && ycp <= item.max
-  ).value;
-
-  const circuitUp = Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
-  const circuitLow =
-    Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
+  // console.log(ycp, circuitUp, circuitLow);
 
   const sectorRatio = await Fundamental.aggregate([
     {
@@ -2214,14 +2447,22 @@ const stockDetails = async (req, res, next) => {
       : null,
   };
 
-  const marketOpenStatus = await getMarketOpenStatus();
+  const marketOpenStatus = await marketStatusHelper(
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute
+  );
 
   res.status(200).json({
     ...minutePrice[0],
     lastDay: yesterdayPrice,
     ...dailyPrice[0],
     fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
-    marketOpenStatus,
+    marketOpenStatus: marketOpenStatus.statusText,
     haltStatus,
   });
   // } catch (error) {
@@ -2243,8 +2484,17 @@ const indexDetails = async (req, res, next) => {
 
   const queryLimit = period ? Number(period) : 750; // default to 3 year //
 
-  const { dailyIndexUpdateDate, minuteDataUpdateDate } =
-    await Setting.findOne().select("dailyIndexUpdateDate minuteDataUpdateDate");
+  const {
+    dailyIndexUpdateDate,
+    minuteDataUpdateDate,
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+  } = await Setting.findOne();
 
   let minutePrice = await DayMinuteIndex.aggregate([
     {
@@ -2522,14 +2772,22 @@ const indexDetails = async (req, res, next) => {
     companyName: 1,
   });
 
-  const marketOpenStatus = await getMarketOpenStatus();
+  const marketOpenStatus = await marketStatusHelper(
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute
+  );
 
   res.status(200).json({
     ...minutePrice[0],
     lastDay: yesterdayPrice,
     ...dailyPrice[0],
     fundamentals,
-    marketOpenStatus,
+    marketOpenStatus: marketOpenStatus.statusText,
   });
   // } catch (error) {
   //   const err = createError(500, "Error Occured");
@@ -2543,8 +2801,17 @@ const indexDetails = async (req, res, next) => {
   @access:    public
 */
 const indexMinuteData = async (req, res, next) => {
-  const { minuteDataUpdateDate, dailyIndexUpdateDate, dataInsertionEnable } =
-    await Setting.findOne();
+  const {
+    minuteDataUpdateDate,
+    dailyIndexUpdateDate,
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute,
+  } = await Setting.findOne();
 
   const index = await MinuteIndex.aggregate([
     {
@@ -2637,9 +2904,19 @@ const indexMinuteData = async (req, res, next) => {
 
   const rsi = calculateRsiLastValue(prices);
 
-  const marketOpenStatus = await getMarketOpenStatus();
+  const marketOpenStatus = await marketStatusHelper(
+    dataInsertionEnable,
+    openHour,
+    openMinute,
+    closeHour,
+    closeMinute,
+    preCloseHour,
+    preCloseMinute
+  );
 
-  res.status(200).json({ ...index[0], rsi, marketOpenStatus });
+  res
+    .status(200)
+    .json({ ...index[0], rsi, marketOpenStatus: marketOpenStatus.statusText });
 };
 
 /*
@@ -2742,6 +3019,10 @@ const blocktrByStock = async (req, res, next) => {
 const topGainerLoser = async (req, res, next) => {
   const setLimit = 10;
 
+  const { minuteDataUpdateDate } = await Setting.findOne().select(
+    "minuteDataUpdateDate"
+  );
+
   const gainerLoser = await LatestPrice.aggregate([
     {
       $lookup: {
@@ -2758,15 +3039,23 @@ const topGainerLoser = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "halt_shares",
+        pipeline: [
+          {
+            $match: {
+              date: minuteDataUpdateDate,
+            },
+          },
+        ],
       },
     },
-    { $unwind: "$halt_shares" },
+    { $unwind: { path: "$halt_shares", preserveNullAndEmptyArrays: true } },
     {
       $addFields: {
         category: "$fundamentals.category",
         type: "$fundamentals.type",
         sector: "$fundamentals.sector",
         companyName: "$fundamentals.companyName",
+        recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
       },
     },
@@ -2798,6 +3087,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2827,6 +3117,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2856,6 +3147,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2885,6 +3177,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2914,6 +3207,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2943,6 +3237,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -2972,6 +3267,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -3001,6 +3297,7 @@ const topGainerLoser = async (req, res, next) => {
               sector: 1,
               companyName: 1,
               haltStatus: 1,
+              recordDate: 1,
             },
           },
         ],
@@ -3052,9 +3349,16 @@ const allGainerLoser = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "halt_shares",
+        pipeline: [
+          {
+            $match: {
+              date: minuteDataUpdateDate,
+            },
+          },
+        ],
       },
     },
-    { $unwind: "$halt_shares" },
+    { $unwind: { path: "$halt_shares", preserveNullAndEmptyArrays: true } },
     {
       $addFields: {
         ltp: {
@@ -3382,6 +3686,7 @@ const allGainerLoser = async (req, res, next) => {
         category: "$fundamentals.category",
         type: "$fundamentals.type",
         sector: "$fundamentals.sector",
+        recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
         id: "$_id",
       },
@@ -3397,6 +3702,7 @@ const allGainerLoser = async (req, res, next) => {
         category: 1,
         type: 1,
         sector: 1,
+        recordDate: 1,
         haltStatus: 1,
         day: {
           change: "$change",
@@ -4238,30 +4544,23 @@ const marketDepth = async (req, res) => {
     }
 
     const latestPrice = await LatestPrice.findOne({ tradingCode: inst });
+
     const price = latestPrice.ltp;
     const ycp = latestPrice.ycp;
+    const change = latestPrice.change;
 
-    const circuitUpRange = circuitUpMoveRange.find(
-      (item) => ycp >= item.min && ycp <= item.max
-    ).value;
-    const circuitDownRange = circuitDownMoveRange.find(
-      (item) => ycp >= item.min && ycp <= item.max
-    ).value;
+    const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
 
-    const circuitUpPrice =
-      Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
-    const circuitDownPrice =
-      Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
+    const upperCircuitLimitReached =
+      change > 0 && circuitUp == price ? true : false;
+    const lowerCircuitLimitReached =
+      change < 0 && circuitLow == price ? true : false;
 
-    let circuitLimitReached = false;
-
-    if (latestPrice.change > 0) {
-      circuitLimitReached = circuitUpPrice == price ? true : false;
-    } else if (latestPrice.change < 0) {
-      circuitLimitReached = circuitDownPrice == price ? true : false;
-    }
-
-    let status = circuitLimitReached ? initMarketDepthStatus : "none";
+    const status =
+      (upperCircuitLimitReached && initMarketDepthStatus == "buy") ||
+      (lowerCircuitLimitReached && initMarketDepthStatus == "sell")
+        ? initMarketDepthStatus
+        : "none";
 
     return res.status(200).json({
       tradingCode: inst,
@@ -4286,14 +4585,14 @@ const marketDepth = async (req, res) => {
 const marketDepthAllInst = async (req, res) => {
   const allStocks = await LatestPrice.find();
 
-  // const allStocks = [{ tradingCode: "ROBI" }];
+  // const allStocks = [{ tradingCode: "JUTESPINN" }];
 
   const result = [];
 
   for (let item of allStocks) {
     const inst = item.tradingCode;
 
-    // console.log("start -> ", inst);
+    console.log(inst, " -> start");
 
     const output = await axios.request({
       method: "post",
@@ -4313,7 +4612,7 @@ const marketDepthAllInst = async (req, res) => {
     const document = dom.window?.document;
 
     if (!document) {
-      // console.log("Error -> ", inst);
+      console.log(inst, " -> Error");
       continue;
     }
 
@@ -4340,33 +4639,45 @@ const marketDepthAllInst = async (req, res) => {
     const latestPrice = await LatestPrice.findOne({ tradingCode: inst });
 
     const price = latestPrice.ltp;
-
     const ycp = latestPrice.ycp;
+    const change = latestPrice.change;
 
-    const circuitUpRange = circuitUpMoveRange.find(
-      (item) => ycp >= item.min && ycp <= item.max
-    ).value;
+    // const circuitUpRange = circuitUpMoveRange.find(
+    //   (item) => ycp >= item.min && ycp <= item.max
+    // ).value;
 
-    const circuitDownRange = circuitDownMoveRange.find(
-      (item) => ycp >= item.min && ycp <= item.max
-    ).value;
+    // const circuitDownRange = circuitDownMoveRange.find(
+    //   (item) => ycp >= item.min && ycp <= item.max
+    // ).value;
 
-    const circuitUpPrice =
-      Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
-    const circuitDownPrice =
-      Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
+    // const circuitUpPrice = Number(
+    //   (ycp + getNumWithFirstDecimalDigit((ycp * circuitUpRange) / 100)).toFixed(
+    //     2
+    //   )
+    // );
+    // const circuitDownPrice = Number(
+    //   (
+    //     ycp - getNumWithFirstDecimalDigit((ycp * circuitDownRange) / 100)
+    //   ).toFixed(2)
+    // );
 
-    let circuitLimitReached = false;
+    // const circuitUpPrice =
+    //   Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
+    // const circuitDownPrice =
+    //   Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
 
-    // console.log(ycp, circuitUpPrice, price, circuitDownPrice);
+    const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
 
-    if (latestPrice.change > 0) {
-      circuitLimitReached = circuitUpPrice == price ? true : false;
-    } else if (latestPrice.change < 0) {
-      circuitLimitReached = circuitDownPrice == price ? true : false;
-    }
+    const upperCircuitLimitReached =
+      change > 0 && circuitUp == price ? true : false;
+    const lowerCircuitLimitReached =
+      change < 0 && circuitLow == price ? true : false;
 
-    let status = circuitLimitReached ? initMarketDepthStatus : "none";
+    const status =
+      (upperCircuitLimitReached && initMarketDepthStatus == "buy") ||
+      (lowerCircuitLimitReached && initMarketDepthStatus == "sell")
+        ? initMarketDepthStatus
+        : "none";
 
     await HaltStatus.findOneAndUpdate(
       { tradingCode: inst },
@@ -4381,7 +4692,10 @@ const marketDepthAllInst = async (req, res) => {
             .set({ second: 0, millisecond: 0 })
             .toISO(),
           initMarketDepthStatus,
-          circuitLimitReached,
+          upperCircuitLimitReached,
+          lowerCircuitLimitReached,
+          circuitLimitReached:
+            upperCircuitLimitReached || lowerCircuitLimitReached,
           totalBuyVolume: buy?.totalVolume,
           totalSellVolume: sell?.totalVolume,
           status,
@@ -4389,6 +4703,8 @@ const marketDepthAllInst = async (req, res) => {
       },
       { upsert: true }
     );
+
+    console.log(inst, " : final status -> ", status);
 
     result.push(inst);
   }
@@ -4573,6 +4889,37 @@ const newtest = async (req, res) => {
   Helper functions
 */
 
+const getNumWithFirstDecimalDigit = (num) => {
+  const intPart = Math.floor(num);
+  const decimalPart = Math.abs(num) % 1;
+  return intPart + Math.floor(decimalPart * 10) / 10;
+};
+
+const circuitUpDownLimits = (ycp) => {
+  const circuitUpRange = circuitUpMoveRange.find(
+    (item) => ycp > item.min && ycp <= item.max
+  ).value;
+
+  const circuitDownRange = circuitDownMoveRange.find(
+    (item) => ycp > item.min && ycp <= item.max
+  ).value;
+
+  const circuitUp = Number(
+    (ycp + getNumWithFirstDecimalDigit((ycp * circuitUpRange) / 100)).toFixed(2)
+  );
+
+  const circuitLow = Number(
+    (ycp - getNumWithFirstDecimalDigit((ycp * circuitDownRange) / 100)).toFixed(
+      2
+    )
+  );
+
+  return {
+    circuitUp,
+    circuitLow,
+  };
+};
+
 const buySellCounts = (tds) => {
   if (!tds) return null;
 
@@ -4639,6 +4986,7 @@ module.exports = {
   getBarsTvchart,
   getAllStocks,
   getStocksList,
+  getMarketStatus,
   getIpoList,
   latestPrice,
   indexMover,

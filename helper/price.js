@@ -1,44 +1,88 @@
-const {
-  MARKET_CLOSE_HOUR,
-  MARKET_CLOSE_MINUTE,
-  MARKET_PRE_CLOSE_MINUTE,
-} = require("../data/constants");
+const marketStatusHelper = async (
+  dataInsertionEnable,
+  openHour,
+  openMinute,
+  closeHour,
+  closeMinute,
+  preCloseHour,
+  preCloseMinute
+) => {
+  const getMarketStatusText = (currentHour, currentMinute) => {
+    if (isEarlier(openHour, openMinute, currentHour, currentMinute)) {
+      return "Closed";
+    } else if (
+      isLater(preCloseHour, preCloseMinute, currentHour, currentMinute) &&
+      isEarlier(closeHour, closeMinute, currentHour, currentMinute)
+    ) {
+      return "Post close";
+    } else if (isLater(closeHour, closeMinute, currentHour, currentMinute)) {
+      return "Closed";
+    } else {
+      return "Open";
+    }
+  };
 
-const Setting = require("../models/settingModel");
+  const now = new Date();
+  const currentHour = now.getUTCHours();
+  const currentMinute = now.getUTCMinutes();
 
-const getMarketOpenStatus = async () => {
-  const { dataInsertionEnable } = await Setting.findOne().select(
-    "dataInsertionEnable"
-  );
-
-  const nowdate = new Date();
-  let nowhour = nowdate.getUTCHours();
-  let nowminute = nowdate.getUTCMinutes();
-
-  let marketOpenStatus = "Closed";
+  let statusText;
 
   if (dataInsertionEnable === 0) {
-    marketOpenStatus = "Closed";
+    statusText = "Closed";
   } else {
-    if (nowhour > MARKET_CLOSE_HOUR) {
-      marketOpenStatus = "Closed";
-    } else if (nowhour == MARKET_CLOSE_HOUR) {
-      if (nowminute > MARKET_CLOSE_MINUTE) {
-        marketOpenStatus = "Closed";
-      } else if (
-        nowminute < MARKET_CLOSE_MINUTE &&
-        nowminute > MARKET_PRE_CLOSE_MINUTE
-      ) {
-        marketOpenStatus = "Post close";
-      } else {
-        marketOpenStatus = "Open";
-      }
-    } else {
-      marketOpenStatus = "Open";
-    }
+    statusText = getMarketStatusText(currentHour, currentMinute);
   }
-  return marketOpenStatus;
+  const isOpen = statusText === "Closed" ? false : true;
+
+  return {
+    statusText,
+    isOpen,
+  };
 };
+
+function isLater(hour, minute, currentHour, currentMinute) {
+  return (
+    currentHour > hour || (currentHour === hour && currentMinute >= minute)
+  );
+}
+function isEarlier(hour, minute, currentHour, currentMinute) {
+  return currentHour < hour || (currentHour === hour && currentMinute < minute);
+}
+
+// const getMarketOpenStatus = async () => {
+//   const { dataInsertionEnable } = await Setting.findOne().select(
+//     "dataInsertionEnable"
+//   );
+
+//   const nowdate = new Date();
+//   let nowhour = nowdate.getUTCHours();
+//   let nowminute = nowdate.getUTCMinutes();
+
+//   let marketOpenStatus = "Closed";
+
+//   if (dataInsertionEnable === 0) {
+//     marketOpenStatus = "Closed";
+//   } else {
+//     if (nowhour > MARKET_CLOSE_HOUR) {
+//       marketOpenStatus = "Closed";
+//     } else if (nowhour == MARKET_CLOSE_HOUR) {
+//       if (nowminute > MARKET_CLOSE_MINUTE) {
+//         marketOpenStatus = "Closed";
+//       } else if (
+//         nowminute < MARKET_CLOSE_MINUTE &&
+//         nowminute > MARKET_PRE_CLOSE_MINUTE
+//       ) {
+//         marketOpenStatus = "Post close";
+//       } else {
+//         marketOpenStatus = "Open";
+//       }
+//     } else {
+//       marketOpenStatus = "Open";
+//     }
+//   }
+//   return marketOpenStatus;
+// };
 
 function calculateReturns(prices) {
   const returns = [];
@@ -92,8 +136,6 @@ function calculateBeta(stockData, marketData) {
 
   const groupedData = groupBy(stockData, "tradingCode");
 
-  console.log(groupedData.length);
-
   let betaList = [];
   for (stock of groupedData) {
     const stockPrices = stock.data.map((entry) => entry.ltp);
@@ -112,6 +154,7 @@ function calculateBeta(stockData, marketData) {
 }
 
 module.exports = {
-  getMarketOpenStatus,
+  marketStatusHelper,
+  // getMarketOpenStatus,
   calculateBeta,
 };

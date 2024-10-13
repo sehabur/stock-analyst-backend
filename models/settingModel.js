@@ -4,31 +4,60 @@ const settingSchema = mongoose.Schema(
   {
     dataInsertionEnable: {
       type: Number,
-      required: true,
     },
     minuteDataUpdateDate: {
       type: Date,
-      required: true,
+    },
+    ipoUpdateTime: {
+      type: Date,
     },
     dailyIndexUpdateDate: {
       type: Date,
-      required: true,
     },
     dailyPriceUpdateDate: {
       type: Date,
-      required: true,
     },
     dailySectorUpdateDate: {
       type: Date,
-      required: true,
     },
     dailyBlockTrUpdateDate: {
       type: Date,
-      required: true,
     },
     lastVolume: {
       type: Number,
-      required: true,
+    },
+    ipoUpdateTime: {
+      type: Date,
+    },
+    openHour: {
+      type: Number,
+    },
+    openMinute: {
+      type: Number,
+    },
+    closeHour: {
+      type: Number,
+    },
+    closeMinute: {
+      type: Number,
+    },
+    preCloseHour: {
+      type: Number,
+    },
+    preCloseMinute: {
+      type: Number,
+    },
+    dataFetchStartHour: {
+      type: Number,
+    },
+    dataFetchStartMinute: {
+      type: Number,
+    },
+    dataFetchEndHour: {
+      type: Number,
+    },
+    dataFetchEndMinute: {
+      type: Number,
     },
   },
   {

@@ -7,19 +7,10 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
+const sendNotificationToFcmToken = async (fcmToken, title, body) => {
   try {
-    const user = await User.findById(userId);
-
-    if (!user?.fcmToken) {
-      return {
-        status: 404,
-        message: "User not found",
-      };
-    }
-
     const payload = {
-      token: user.fcmToken,
+      token: fcmToken,
       notification: {
         title: title,
         body: body,
@@ -56,13 +47,36 @@ const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
 
     const response = await admin.messaging().send(payload);
 
+    // console.log(response);
+
+    return {
+      status: 200,
+      message: response,
+    };
+  } catch (err) {
+    return {
+      status: 500,
+      message: "Something went wrong",
+    };
+  }
+};
+
+const saveNotificationToDb = async (
+  userId,
+  title,
+  body,
+  fcmToken,
+  tradingCode,
+  firebaseResponse = ""
+) => {
+  try {
     await Notification.create({
       title,
       body,
       tradingCode,
       user: userId,
-      fcmToken: user.fcmToken,
-      firebaseResponse: response || "",
+      fcmToken,
+      firebaseResponse,
       deliveryTime: new Date(),
       isNew: true,
     });
@@ -81,4 +95,5 @@ const sendNotificationToFcmToken = async (userId, title, body, tradingCode) => {
 
 module.exports = {
   sendNotificationToFcmToken,
+  saveNotificationToDb,
 };

@@ -11,7 +11,10 @@ const LatestPrice = require("../models/latestPriceModel");
 
 const { sendMailToUser } = require("../helper/mailer");
 const PriceAlert = require("../models/priceAlertModel");
-const { sendNotificationToFcmToken } = require("../helper/fcm");
+const {
+  sendNotificationToFcmToken,
+  saveNotificationToDb,
+} = require("../helper/fcm");
 const Notification = require("../models/notificationModel");
 const {
   addDaysToToday,
@@ -710,82 +713,97 @@ const getPriceAlertsByUserId = async (req, res, next) => {
   @access:    private
 */
 const schedulePriceAlertNotification = async (req, res, next) => {
-  try {
-    const alerts = await PriceAlert.aggregate([
-      {
-        $match: {
-          status: "live",
-        },
+  // try {
+  const alerts = await PriceAlert.aggregate([
+    {
+      $match: {
+        status: "live",
       },
-      {
-        $lookup: {
-          from: "latest_prices",
-          localField: "tradingCode",
-          foreignField: "tradingCode",
-          as: "latest_price",
-          pipeline: [
-            {
-              $match: {
-                ltp: { $ne: 0 },
-              },
+    },
+    {
+      $lookup: {
+        from: "latest_prices",
+        localField: "tradingCode",
+        foreignField: "tradingCode",
+        as: "latest_price",
+        pipeline: [
+          {
+            $match: {
+              ltp: { $ne: 0 },
             },
-          ],
-        },
+          },
+        ],
       },
-      { $unwind: "$latest_price" },
-      {
-        $project: {
-          _id: 1,
-          tradingCode: 1,
-          targetPrice: "$price",
-          type: 1,
-          user: 1,
-          currentPrice: "$latest_price.ltp",
-        },
+    },
+    { $unwind: "$latest_price" },
+    {
+      $project: {
+        _id: 1,
+        tradingCode: 1,
+        targetPrice: "$price",
+        type: 1,
+        user: 1,
+        currentPrice: "$latest_price.ltp",
       },
-    ]);
+    },
+  ]);
 
-    for (let alert of alerts) {
-      const { _id, currentPrice, targetPrice, type, tradingCode, user } = alert;
+  for (let alert of alerts) {
+    const { _id, currentPrice, targetPrice, type, tradingCode, user } = alert;
 
-      if (
-        (type == "above" && currentPrice >= targetPrice) ||
-        (type == "below" && currentPrice <= targetPrice)
-      ) {
-        const title = tradingCode + " Price Alert";
-        const body =
-          "Latest trading price is now BDT " +
-          currentPrice +
-          " which is " +
-          type +
-          " your set value (BDT " +
-          targetPrice +
-          ")";
+    if (
+      (type == "above" && currentPrice >= targetPrice) ||
+      (type == "below" && currentPrice <= targetPrice)
+    ) {
+      const title = tradingCode + " Price Alert";
+      const body =
+        "Latest trading price is now BDT " +
+        currentPrice +
+        " which is " +
+        type +
+        " your set value (BDT " +
+        targetPrice +
+        ")";
 
-        const { status } = await sendNotificationToFcmToken(
+      const userInfo = await User.findById(user);
+
+      if (!userInfo) continue;
+
+      console.log(user, userInfo);
+
+      const { fcmToken } = userInfo;
+
+      if (!fcmToken) continue;
+
+      const { status, message } = await sendNotificationToFcmToken(
+        fcmToken,
+        title,
+        body
+      );
+
+      if (status == 200) {
+        await saveNotificationToDb(
           user,
           title,
           body,
-          tradingCode
+          fcmToken,
+          tradingCode,
+          message
         );
-
-        if (status == 200) {
-          await PriceAlert.findByIdAndUpdate(_id, {
-            $set: { status: "executed" },
-          });
-        }
+        await PriceAlert.findByIdAndUpdate(_id, {
+          $set: { status: "executed" },
+        });
       }
     }
-    res
-      .status(200)
-      .json({
-        status: "success",
-        message: "All message delivered successfully",
-      });
-  } catch (err) {
-    const error = createError(500, "Error occured");
-    next(error);
   }
+  res.status(200).json({
+    status: "success",
+    message: "All message delivered successfully",
+  });
+  // } catch (err) {
+  //   const error = createError(500, "Error occured");
+  //   next(error);
+  // }
 };
 
 /*
@@ -841,6 +859,65 @@ const createPriceAlerts = async (req, res, next) => {
     const error = createError(500, "Error occured");
     next(error);
   }
+};
+
+/*
+  @api:       POST /api/users/scheduleNewsAlert/
+  @desc:      schedule News Alert and to user and save to DB
+  @access:    private
+*/
+const scheduleNewsAlert = async (req, res, next) => {
+  const { news } = req.body;
+
+  const users = await User.find({
+    $expr: { $gt: [{ $size: "$favorites" }, 0] },
+  });
+
+  const favItemMap = new Map();
+
+  for (let user of users) {
+    const { _id, fcmToken, favorites } = user;
+
+    for (let favItem of favorites) {
+      if (favItemMap.has(favItem)) {
+        let currUserInfo = favItemMap.get(favItem);
+        favItemMap.set(favItem, [...currUserInfo, { id: _id, fcmToken }]);
+      } else {
+        favItemMap.set(favItem, [{ id: _id, fcmToken }]);
+      }
+    }
+  }
+
+  for (let newsItem of news) {
+    const { tradingCode, title, description } = newsItem;
+
+    const userListToSend = favItemMap.get(newsItem.tradingCode);
+
+    if (userListToSend && userListToSend.length > 0) {
+      userListToSend.forEach(async (user) => {
+        const { status, message } = await sendNotificationToFcmToken(
+          user.fcmToken,
+          title + " | News",
+          description
+        );
+
+        // console.log(status, user.fcmToken, title, description);
+
+        if (status == 200) {
+          await saveNotificationToDb(
+            user.id,
+            title + " | News",
+            description,
+            user.fcmToken,
+            tradingCode,
+            message
+          );
+        }
+      });
+    }
+  }
+
+  res.status(200).json({ status: "success" });
 };
 
 /*
@@ -1009,6 +1086,7 @@ module.exports = {
   createPriceAlerts,
   deletePriceAlerts,
   schedulePriceAlertNotification,
+  scheduleNewsAlert,
   verifyPhone,
   generateOtp,
 };

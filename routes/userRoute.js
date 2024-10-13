@@ -21,6 +21,7 @@ const {
   createPriceAlerts,
   deletePriceAlerts,
   schedulePriceAlertNotification,
+  scheduleNewsAlert,
   getNotificationByUserId,
   resetNewNotifications,
   verifyPhone,
@@ -59,6 +60,8 @@ router.route("/priceAlerts/user/:id").get(checkLogin, getPriceAlertsByUserId);
 router.delete("/priceAlerts/:id", checkLogin, deletePriceAlerts);
 
 router.get("/schedulePriceAlertNotification", schedulePriceAlertNotification);
+
+router.post("/scheduleNewsAlert", scheduleNewsAlert);
 
 router.post("/signin", signin);
 

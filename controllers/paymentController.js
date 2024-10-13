@@ -6,7 +6,9 @@ const { ObjectId } = require("mongodb");
 const User = require("../models/userModel");
 const Payment = require("../models/paymentsModel");
 const { addDaysToToday } = require("../helper/users");
-const { IS_PAYMENT_URL_LIVE } = require("../data/constants");
+// const { IS_PAYMENT_URL_LIVE } = require("../data/constants");
+
+const IS_PAYMENT_URL_LIVE = true;
 
 /*
   @api:       GET /api/payment/init/
