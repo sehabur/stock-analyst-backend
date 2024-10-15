@@ -84,157 +84,216 @@ const getSymbolTvchart = async (req, res) => {
   @access:    public
 */
 const getBarsTvchart = async (req, res) => {
-  try {
-    let { symbol, symbolType, resolutionType, fromTime, toTime, limit } =
-      url.parse(req.url, true).query;
+  // try {
+  let { symbol, symbolType, resolutionType, fromTime, toTime, limit } =
+    url.parse(req.url, true).query;
 
-    let dataTable;
+  let dataTable;
 
-    let latestPrice = [];
+  let latestPrice = [];
 
-    if (resolutionType == "day" && symbolType != "sector") {
-      dataTable = "daily_prices";
+  if (resolutionType == "day" && symbolType != "sector") {
+    dataTable = "daily_prices";
 
-      if (symbolType == "index") {
-        symbol = "00" + symbol;
+    if (symbolType == "index") {
+      symbol = "00" + symbol;
+    }
+
+    const priorDayCount = 14;
+
+    const prices = await DailyPrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          date: {
+            $gte: new Date((fromTime - 86400 * priorDayCount) * 1000),
+            $lte: new Date(toTime * 1000),
+          },
+        },
+      },
+      {
+        $sort: {
+          date: 1,
+        },
+      },
+      {
+        $project: {
+          time: { $toLong: "$date" },
+          open: 1,
+          close: 1,
+          high: 1,
+          low: 1,
+          ltp: 1,
+          ycp: 1,
+          volume: 1,
+        },
+      },
+    ]);
+
+    if (new Date() < new Date(toTime * 1000)) {
+      const { dailyPriceUpdateDate, dailyIndexUpdateDate } =
+        await Setting.findOne().select(
+          "dailyPriceUpdateDate dailyIndexUpdateDate"
+        );
+      todayPrices = [];
+      if (symbolType == "stock") {
+        todayPrices = await DayMinutePrice.aggregate([
+          {
+            $match: {
+              tradingCode: symbol,
+              date: {
+                $gt: dailyPriceUpdateDate,
+              },
+              ltp: { $ne: 0 },
+            },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              open: { $first: "$ltp" },
+              high: { $last: "$high" },
+              low: { $last: "$low" },
+              close: { $last: "$ltp" },
+              ltp: { $last: "$ltp" },
+              ycp: { $first: "$ycp" },
+              volume: { $last: "$volume" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              time: { $toLong: "$date" },
+              open: 1,
+              close: 1,
+              high: 1,
+              low: 1,
+              ltp: 1,
+              ycp: 1,
+              volume: 1,
+            },
+          },
+        ]);
+      } else if (symbolType == "index") {
+        todayPrices = await DayMinuteIndex.aggregate([
+          {
+            $match: {
+              tradingCode: symbol,
+              date: {
+                $gt: dailyIndexUpdateDate,
+              },
+              index: { $ne: 0 },
+            },
+          },
+          {
+            $sort: {
+              time: 1,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              date: { $first: "$date" },
+              open: { $first: "$index" },
+              high: { $max: "$index" },
+              low: { $min: "$index" },
+              close: { $last: "$index" },
+              ltp: { $last: "$index" },
+              // ycp: { $first: "$index" },
+              volume: { $last: "$volume" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              time: { $toLong: "$date" },
+              open: 1,
+              close: 1,
+              high: 1,
+              low: 1,
+              ltp: 1,
+              // ycp: 1,
+              volume: 1,
+            },
+          },
+        ]);
       }
 
-      const priorDayCount = 14;
+      latestPrice = [...prices, ...todayPrices];
+    } else {
+      latestPrice = prices;
+    }
+  } else if (resolutionType == "intraday" && symbolType == "stock") {
+    dataTable = "minute_prices";
 
-      const prices = await DailyPrice.aggregate([
-        {
-          $match: {
-            tradingCode: symbol,
-            date: {
-              $gte: new Date((fromTime - 86400 * priorDayCount) * 1000),
-              $lte: new Date(toTime * 1000),
-            },
+    const prices = await MinutePrice.aggregate([
+      {
+        $match: {
+          tradingCode: symbol,
+          time: {
+            $lte: new Date(toTime * 1000),
           },
         },
-        {
-          $sort: {
-            date: 1,
-          },
+      },
+      {
+        $sort: {
+          time: -1,
         },
-        {
-          $project: {
-            time: { $toLong: "$date" },
-            open: 1,
-            close: 1,
-            high: 1,
-            low: 1,
-            ltp: 1,
-            ycp: 1,
-            volume: 1,
-          },
+      },
+      {
+        $limit: Number(limit),
+      },
+      {
+        $sort: {
+          time: 1,
         },
-      ]);
+      },
+      {
+        $project: {
+          time: { $toLong: "$time" },
+          open: 1,
+          close: 1,
+          high: 1,
+          low: 1,
+          ltp: 1,
+          ycp: 1,
+          volume: 1,
+        },
+      },
+    ]);
 
-      if (new Date() < new Date(toTime * 1000)) {
-        const { dailyPriceUpdateDate, dailyIndexUpdateDate } =
-          await Setting.findOne().select(
-            "dailyPriceUpdateDate dailyIndexUpdateDate"
-          );
-        todayPrices = [];
-        if (symbolType == "stock") {
-          todayPrices = await DayMinutePrice.aggregate([
-            {
-              $match: {
-                tradingCode: symbol,
-                date: {
-                  $gt: dailyPriceUpdateDate,
-                },
-                ltp: { $ne: 0 },
-              },
-            },
-            {
-              $sort: {
-                time: 1,
-              },
-            },
-            {
-              $group: {
-                _id: null,
-                date: { $first: "$date" },
-                open: { $first: "$ltp" },
-                high: { $last: "$high" },
-                low: { $last: "$low" },
-                close: { $last: "$ltp" },
-                ltp: { $last: "$ltp" },
-                ycp: { $first: "$ycp" },
-                volume: { $last: "$volume" },
-              },
-            },
-            {
-              $project: {
-                _id: 0,
-                time: { $toLong: "$date" },
-                open: 1,
-                close: 1,
-                high: 1,
-                low: 1,
-                ltp: 1,
-                ycp: 1,
-                volume: 1,
-              },
-            },
-          ]);
-        } else if (symbolType == "index") {
-          todayPrices = await DayMinuteIndex.aggregate([
-            {
-              $match: {
-                tradingCode: symbol,
-                date: {
-                  $gt: dailyIndexUpdateDate,
-                },
-                ltp: { $ne: 0 },
-              },
-            },
-            {
-              $sort: {
-                time: 1,
-              },
-            },
-            {
-              $group: {
-                _id: null,
-                date: { $first: "$date" },
-                open: { $first: "$ltp" },
-                high: { $last: "$high" },
-                low: { $last: "$low" },
-                close: { $last: "$ltp" },
-                ltp: { $last: "$ltp" },
-                ycp: { $first: "$ycp" },
-                volume: { $last: "$volume" },
-              },
-            },
-            {
-              $project: {
-                _id: 0,
-                time: { $toLong: "$date" },
-                open: 1,
-                close: 1,
-                high: 1,
-                low: 1,
-                ltp: 1,
-                ycp: 1,
-                volume: 1,
-              },
-            },
-          ]);
-        }
+    let volume;
+    for (let i = 1; i < prices.length; i++) {
+      const currentTime = new Date(prices[i].time);
+      const prevTime = new Date(prices[i - 1].time);
 
-        latestPrice = formatCandleChartData([...prices, ...todayPrices]);
+      let currentday = currentTime.getDate();
+      let prevday = prevTime.getDate();
+
+      if (currentday == prevday) {
+        volume = prices[i].volume - prices[i - 1].volume;
       } else {
-        latestPrice = formatCandleChartData(prices);
+        volume = prices[i].volume;
       }
-    } else if (resolutionType == "intraday" && symbolType == "stock") {
-      dataTable = "minute_prices";
+      latestPrice.push({
+        ...prices[i],
+        volume: volume,
+      });
+    }
+  } else if (resolutionType == "intraday" && symbolType == "index") {
+    dataTable = "index_minute_values";
 
-      const prices = await MinutePrice.aggregate([
+    let prices;
+
+    if (symbol == "00DSEX") {
+      prices = await MinuteIndex.aggregate([
         {
           $match: {
-            tradingCode: symbol,
             time: {
               $lte: new Date(toTime * 1000),
             },
@@ -256,325 +315,265 @@ const getBarsTvchart = async (req, res) => {
         {
           $project: {
             time: { $toLong: "$time" },
-            open: 1,
-            close: 1,
-            high: 1,
-            low: 1,
-            ltp: 1,
-            ycp: 1,
-            volume: 1,
+            open: "$dsex.index",
+            ycp: "$dsex.index",
+            close: "$dsex.index",
+            ltp: "$dsex.index",
+            high: "$dsex.index",
+            low: "$dsex.index",
+            volume: "$totalVolume",
           },
         },
       ]);
-
-      let volume;
-      for (let i = 1; i < prices.length; i++) {
-        const currentTime = new Date(prices[i].time);
-        const prevTime = new Date(prices[i - 1].time);
-
-        let currentday = currentTime.getDate();
-        let prevday = prevTime.getDate();
-
-        if (currentday == prevday) {
-          volume = prices[i].volume - prices[i - 1].volume;
-        } else {
-          volume = prices[i].volume;
-        }
-        latestPrice.push({
-          ...prices[i],
-          volume: volume,
-        });
-      }
-    } else if (resolutionType == "intraday" && symbolType == "index") {
-      dataTable = "index_minute_values";
-
-      let prices;
-
-      if (symbol == "00DSEX") {
-        prices = await MinuteIndex.aggregate([
-          {
-            $match: {
-              time: {
-                $lte: new Date(toTime * 1000),
-              },
-            },
-          },
-          {
-            $sort: {
-              time: -1,
-            },
-          },
-          {
-            $limit: Number(limit),
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $project: {
-              time: { $toLong: "$time" },
-              open: "$dsex.index",
-              ycp: "$dsex.index",
-              close: "$dsex.index",
-              ltp: "$dsex.index",
-              high: "$dsex.index",
-              low: "$dsex.index",
-              volume: "$totalVolume",
-            },
-          },
-        ]);
-      } else if (symbol == "00DSES") {
-        prices = await MinuteIndex.aggregate([
-          {
-            $match: {
-              time: {
-                $lte: new Date(toTime * 1000),
-              },
-            },
-          },
-          {
-            $sort: {
-              time: -1,
-            },
-          },
-          {
-            $limit: Number(limit),
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $project: {
-              time: { $toLong: "$time" },
-              open: "$dses.index",
-              ycp: "$dses.index",
-              close: "$dses.index",
-              ltp: "$dses.index",
-              high: "$dses.index",
-              low: "$dses.index",
-              volume: "$totalVolume",
-            },
-          },
-        ]);
-      } else if (symbol == "00DS30") {
-        prices = await MinuteIndex.aggregate([
-          {
-            $match: {
-              time: {
-                $lte: new Date(toTime * 1000),
-              },
-            },
-          },
-          {
-            $sort: {
-              time: -1,
-            },
-          },
-          {
-            $limit: Number(limit),
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $project: {
-              time: { $toLong: "$time" },
-              open: "$dse30.index",
-              ycp: "$dse30.index",
-              close: "$dse30.index",
-              ltp: "$dse30.index",
-              high: "$dse30.index",
-              low: "$dse30.index",
-              volume: "$totalVolume",
-            },
-          },
-        ]);
-      }
-
-      let volume;
-      for (let i = 1; i < prices.length; i++) {
-        const currentTime = new Date(prices[i].time);
-        const prevTime = new Date(prices[i - 1].time);
-
-        let currentday = currentTime.getDate();
-        let prevday = prevTime.getDate();
-
-        if (currentday == prevday) {
-          volume = prices[i].volume - prices[i - 1].volume;
-        } else {
-          volume = prices[i].volume;
-        }
-        latestPrice.push({
-          ...prices[i],
-          volume: volume,
-        });
-      }
-    } else if (resolutionType == "day" && symbolType == "sector") {
-      dataTable = "daily_sectors";
-
-      console.log(symbol, new Date(fromTime * 1000), new Date(toTime * 1000));
-
-      const sectorPrices = await DailySector.aggregate([
+    } else if (symbol == "00DSES") {
+      prices = await MinuteIndex.aggregate([
         {
           $match: {
-            sector: symbol,
-            date: {
-              $gte: new Date(fromTime * 1000),
+            time: {
               $lte: new Date(toTime * 1000),
             },
           },
         },
         {
           $sort: {
-            date: 1,
+            time: -1,
+          },
+        },
+        {
+          $limit: Number(limit),
+        },
+        {
+          $sort: {
+            time: 1,
           },
         },
         {
           $project: {
+            time: { $toLong: "$time" },
+            open: "$dses.index",
+            ycp: "$dses.index",
+            close: "$dses.index",
+            ltp: "$dses.index",
+            high: "$dses.index",
+            low: "$dses.index",
+            volume: "$totalVolume",
+          },
+        },
+      ]);
+    } else if (symbol == "00DS30") {
+      prices = await MinuteIndex.aggregate([
+        {
+          $match: {
+            time: {
+              $lte: new Date(toTime * 1000),
+            },
+          },
+        },
+        {
+          $sort: {
+            time: -1,
+          },
+        },
+        {
+          $limit: Number(limit),
+        },
+        {
+          $sort: {
+            time: 1,
+          },
+        },
+        {
+          $project: {
+            time: { $toLong: "$time" },
+            open: "$dse30.index",
+            ycp: "$dse30.index",
+            close: "$dse30.index",
+            ltp: "$dse30.index",
+            high: "$dse30.index",
+            low: "$dse30.index",
+            volume: "$totalVolume",
+          },
+        },
+      ]);
+    }
+
+    let volume;
+    for (let i = 1; i < prices.length; i++) {
+      const currentTime = new Date(prices[i].time);
+      const prevTime = new Date(prices[i - 1].time);
+
+      let currentday = currentTime.getDate();
+      let prevday = prevTime.getDate();
+
+      if (currentday == prevday) {
+        volume = prices[i].volume - prices[i - 1].volume;
+      } else {
+        volume = prices[i].volume;
+      }
+      latestPrice.push({
+        ...prices[i],
+        volume: volume,
+      });
+    }
+  } else if (resolutionType == "day" && symbolType == "sector") {
+    dataTable = "daily_sectors";
+
+    console.log(symbol, new Date(fromTime * 1000), new Date(toTime * 1000));
+
+    const sectorPrices = await DailySector.aggregate([
+      {
+        $match: {
+          sector: symbol,
+          date: {
+            $gte: new Date(fromTime * 1000),
+            $lte: new Date(toTime * 1000),
+          },
+        },
+      },
+      {
+        $sort: {
+          date: 1,
+        },
+      },
+      {
+        $project: {
+          date: 1,
+          time: { $toLong: "$date" },
+          open: 1,
+          close: 1,
+          high: 1,
+          low: 1,
+          ltp: 1,
+          ycp: 1,
+          volume: 1,
+        },
+      },
+    ]);
+
+    if (new Date() < new Date(toTime * 1000)) {
+      const { dailySectorUpdateDate, minuteDataUpdateDate } =
+        await Setting.findOne().select(
+          "dailySectorUpdateDate minuteDataUpdateDate"
+        );
+
+      const todayPrices = await LatestPrice.aggregate([
+        {
+          $match: {
+            date: {
+              $gt: dailySectorUpdateDate,
+            },
+          },
+        },
+        {
+          $addFields: {
+            ltp: {
+              $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+            },
+          },
+        },
+        {
+          $unionWith: {
+            coll: "inactive_stocks",
+            pipeline: [
+              {
+                $addFields: {
+                  date: minuteDataUpdateDate,
+                  ltp: "$price",
+                  high: "$price",
+                  low: "$price",
+                  close: "$price",
+                  open: "$price",
+                  ycp: "$price",
+                  trade: 0,
+                  value: 0,
+                  volume: 0,
+                },
+              },
+              {
+                $match: {
+                  date: {
+                    $gt: dailySectorUpdateDate,
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          $lookup: {
+            from: "fundamentals",
+            localField: "tradingCode",
+            foreignField: "tradingCode",
+            as: "fundamentals",
+          },
+        },
+        { $unwind: "$fundamentals" },
+        {
+          $match: {
+            "fundamentals.sector": symbol,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            date: { $first: "$date" },
+            ltp: { $avg: "$ltp" },
+            // ycp: { $avg: "$ycp" },
+            high: { $avg: "$high" },
+            low: { $avg: "$low" },
+            open: { $avg: "$ycp" },
+            close: { $avg: "$ltp" },
+            // trade: { $sum: "$trade" },
+            // value: { $sum: "$value" },
+            volume: { $sum: "$volume" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
             time: { $toLong: "$date" },
-            open: 1,
-            close: 1,
-            high: 1,
-            low: 1,
-            ltp: 1,
-            ycp: 1,
+            ltp: { $round: ["$ltp", 2] },
+            ycp: { $round: ["$ycp", 2] },
+            high: { $round: ["$high", 2] },
+            low: { $round: ["$low", 2] },
+            close: { $round: ["$close", 2] },
+            open: { $round: ["$open", 2] },
+            // change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
+            // percentChange: {
+            //   $round: [
+            //     {
+            //       $multiply: [
+            //         { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+            //         100,
+            //       ],
+            //     },
+            //     2,
+            //   ],
+            // },
+            // trade: 1,
+            // value: 1,
             volume: 1,
           },
         },
       ]);
-
-      if (new Date() < new Date(toTime * 1000)) {
-        const { dailySectorUpdateDate, minuteDataUpdateDate } =
-          await Setting.findOne().select(
-            "dailySectorUpdateDate minuteDataUpdateDate"
-          );
-
-        const todayPrices = await LatestPrice.aggregate([
-          {
-            $match: {
-              date: {
-                $gt: dailySectorUpdateDate,
-              },
-            },
-          },
-          {
-            $addFields: {
-              ltp: {
-                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
-              },
-            },
-          },
-          {
-            $unionWith: {
-              coll: "inactive_stocks",
-              pipeline: [
-                {
-                  $addFields: {
-                    date: minuteDataUpdateDate,
-                    ltp: "$price",
-                    high: "$price",
-                    low: "$price",
-                    close: "$price",
-                    open: "$price",
-                    ycp: "$price",
-                    trade: 0,
-                    value: 0,
-                    volume: 0,
-                  },
-                },
-                {
-                  $match: {
-                    date: {
-                      $gt: dailySectorUpdateDate,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-          {
-            $lookup: {
-              from: "fundamentals",
-              localField: "tradingCode",
-              foreignField: "tradingCode",
-              as: "fundamentals",
-            },
-          },
-          { $unwind: "$fundamentals" },
-          {
-            $match: {
-              "fundamentals.sector": sector,
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              date: { $first: "$date" },
-              ltp: { $avg: "$ltp" },
-              ycp: { $avg: "$ycp" },
-              high: { $avg: "$high" },
-              low: { $avg: "$low" },
-              open: { $avg: "$ycp" },
-              close: { $avg: "$close" },
-              trade: { $sum: "$trade" },
-              value: { $sum: "$value" },
-              volume: { $sum: "$volume" },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              date: 1,
-              sector: sector,
-              ltp: { $round: ["$ltp", 2] },
-              ycp: { $round: ["$ycp", 2] },
-              high: { $round: ["$high", 2] },
-              low: { $round: ["$low", 2] },
-              close: { $round: ["$close", 2] },
-              open: { $round: ["$open", 2] },
-              change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
-              percentChange: {
-                $round: [
-                  {
-                    $multiply: [
-                      { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
-                      100,
-                    ],
-                  },
-                  2,
-                ],
-              },
-              trade: 1,
-              value: 1,
-              volume: 1,
-            },
-          },
-        ]);
-      }
-
       latestPrice = [...sectorPrices, ...todayPrices];
-
-      console.log(sectorPrices);
+    } else {
+      latestPrice = [...sectorPrices];
     }
-
-    let data = {
-      Response: "Success",
-      Data: latestPrice,
-    };
-    res.status(200).json(data);
-  } catch (error) {
-    let data = {
-      Response: "Error",
-      Data: [],
-    };
-    res.status(400).json(data);
   }
+
+  let data = {
+    Response: "Success",
+    Data: latestPrice,
+  };
+  res.status(200).json(data);
+  // } catch (error) {
+  //   let data = {
+  //     Response: "Error",
+  //     Data: [],
+  //   };
+  //   res.status(400).json(data);
+  // }
 };
 
 /*
