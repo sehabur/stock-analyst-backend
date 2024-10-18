@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
 const serviceAccount = require("../serviceAccountKey.json");
-const User = require("../models/userModel");
+// const User = require("../models/userModel");
 const Notification = require("../models/notificationModel");
 
 admin.initializeApp({
@@ -78,7 +78,7 @@ const saveNotificationToDb = async (
       fcmToken,
       firebaseResponse,
       deliveryTime: new Date(),
-      isNew: true,
+      isUnread: true,
     });
 
     return {

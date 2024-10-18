@@ -1,21 +1,21 @@
+const url = require("url");
 const createError = require("http-errors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
-const url = require("url");
 
 const User = require("../models/userModel");
 const Portfolio = require("../models/portfolioModel");
 const PortfolioItem = require("../models/portfolioItemModel");
 const LatestPrice = require("../models/latestPriceModel");
+const Notification = require("../models/notificationModel");
+const PriceAlert = require("../models/priceAlertModel");
 
 const { sendMailToUser } = require("../helper/mailer");
-const PriceAlert = require("../models/priceAlertModel");
 const {
   sendNotificationToFcmToken,
   saveNotificationToDb,
 } = require("../helper/fcm");
-const Notification = require("../models/notificationModel");
 const {
   addDaysToToday,
   generateSixDigitRandomNumber,
@@ -54,7 +54,7 @@ const signin = async (req, res, next) => {
 
     const newNotificationCount = await Notification.find({
       user: user._id,
-      isNew: true,
+      isUnread: true,
     }).count();
 
     // user.loggedInDeviceCount = user.loggedInDeviceCount || 1 + 1;
@@ -140,7 +140,10 @@ const generateOtp = async (req, res, next) => {
     const { _id, phone } = req.user;
     const otp = generateSixDigitRandomNumber();
 
-    const { status } = await sendOtpToUser(phone, otp);
+    const message =
+      "Your Stocksupporter Verification OTP Code is " + otp.toString();
+
+    const { status } = await sendOtpToUser(phone, message);
 
     if (status == "success") {
       await User.findByIdAndUpdate(_id, {
@@ -202,7 +205,7 @@ const getUserProfileById = async (req, res, next) => {
 
     const newNotificationCount = await Notification.find({
       user: req.params.id,
-      isNew: true,
+      isUnread: true,
     }).count();
 
     if (!user) {
@@ -233,9 +236,9 @@ const resetNewNotifications = async (req, res, next) => {
     const notif = await Notification.updateMany(
       {
         user: req.user.id,
-        isNew: true,
+        isUnread: true,
       },
-      { isNew: false }
+      { isUnread: false }
     );
     res.status(200).json({
       status: "success",
@@ -931,28 +934,25 @@ const changePassword = async (req, res, next) => {
 
     const user = await User.findById(req.user.id);
 
-    if (user) {
-      result = await bcrypt.compare(oldPassword, user.password);
-
-      if (result) {
-        await user.updateOne({
-          password: encriptPassword(newPassword),
-        });
-
-        res.status(201).json({
-          message: "Password changed successful.",
-        });
-      } else {
-        const error = createError(401, "Old Password does not match.");
-        next(error);
-      }
-    } else {
-      const error = createError(404, "User not found");
-      next(error);
+    if (!user) {
+      return next(createError(404, "User not found"));
     }
+
+    result = await bcrypt.compare(oldPassword, user.password);
+
+    if (!result) {
+      return next(createError(401, "Old Password does not match."));
+    }
+
+    await user.updateOne({
+      password: encriptPassword(newPassword),
+    });
+
+    res.status(201).json({
+      message: "Password changed successful.",
+    });
   } catch (err) {
-    const error = createError(500, "Password change failed.");
-    next(error);
+    next(createError(500, "Password change failed."));
   }
 };
 
@@ -964,42 +964,32 @@ const changePassword = async (req, res, next) => {
 const resetPasswordLink = async (req, res, next) => {
   try {
     const { phone } = req.body;
+
     const user = await User.findOne({ phone });
 
-    if (user) {
-      const resetToken = uuidv4();
+    if (!user) {
+      return next(createError(404, "User not found with this phone number"));
+    }
 
-      await User.findOneAndUpdate(user._id, {
-        resetToken,
-        resetTokenExpiry: addMinutes(new Date(), 15), // 15 min from now //
-      });
+    const otp = generateSixDigitRandomNumber();
 
-      const verificationLink = `${process.env.FRONT_END_URL}/manage-password/set-new?user=${user._id}&resetToken=${resetToken}`;
+    const message =
+      "Your Stocksupporter Password Reset OTP Code is " + otp.toString();
 
-      const mailBody = `<html><body><h2>Reset your password </h2><p>Click on the below link to reset your password</p><a href=${verificationLink} target="_blank">Reset Password</a><br/><br/><p>If you face any difficulties or need any assistance please contact us at <a href="mailto:kuetianshub@gmail.com">kuetianshub@gmail.com</a></p></body></html>`;
+    const { status } = await sendOtpToUser(phone, message);
 
-      const mailSendResponse = await sendMailToUser(
-        user.email,
-        mailBody,
-        "Reset your password"
-      );
+    if (status == "success") {
+      user.resetToken = otp;
+      user.resetTokenExpiry = addMinutes(new Date(), 15);
 
-      if (mailSendResponse.messageId) {
-        res.status(200).json({
-          message: "Password reset link sent successfully",
-          mailTo: user.email,
-        });
-      } else {
-        const error = createError(500, "Password reset link sent failed.");
-        next(error);
-      }
+      await user.save();
+
+      res.status(200).json({ message: "Otp sending success" });
     } else {
-      const error = createError(500, "User not found with this email");
-      next(error);
+      res.status(400).json({ message: "Otp sending failed" });
     }
   } catch (err) {
-    const error = createError(500, "Password reset link sent failed.");
-    next(error);
+    next(createError(500, "Password reset OTP sent failed"));
   }
 };
 
@@ -1010,37 +1000,31 @@ const resetPasswordLink = async (req, res, next) => {
 */
 const setNewPassword = async (req, res, next) => {
   try {
-    const { newPassword, userId, resetToken } = req.body;
-    const user = await User.findById(userId);
+    const { phone, otp, newPassword } = req.body;
 
-    if (user) {
-      if (
-        user.resetToken === resetToken &&
-        user.resetTokenExpiry > new Date()
-      ) {
-        await user.updateOne({
-          password: encriptPassword(newPassword),
-          resetToken: null,
-          resetTokenExpiry: null,
-        });
+    const user = await User.findOne({ phone });
 
-        res.status(201).json({
-          message: "Password changed successfully",
-        });
-      } else {
-        const error = createError(
-          401,
-          "Your password reset link is invalid or got expired."
-        );
-        next(error);
-      }
+    if (!user) {
+      return next(createError(500, "User not found."));
+    }
+
+    if (user.resetToken === otp && user.resetTokenExpiry > new Date()) {
+      await user.updateOne({
+        password: encriptPassword(newPassword),
+        resetToken: null,
+        resetTokenExpiry: null,
+      });
+
+      res.status(201).json({
+        message: "Password changed successfully",
+      });
     } else {
-      const error = createError(500, "User not found.");
-      next(error);
+      next(
+        createError(401, "Your password reset OTP is invalid or got expired.")
+      );
     }
   } catch (err) {
-    const error = createError(500, "Password change failed.");
-    next(error);
+    next(createError(500, "Password change failed."));
   }
 };
 

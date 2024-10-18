@@ -11,7 +11,7 @@ const notificationSchema = mongoose.Schema(
     tradingCode: {
       type: String,
     },
-    isNew: {
+    isUnread: {
       type: Boolean,
     },
     user: {

@@ -27,29 +27,26 @@ function addDaysToToday(days) {
 }
 
 function generateSixDigitRandomNumber() {
-  // return Math.floor(100000 + Math.random() * 900000);
-  return 123456;
+  // return 123456;
+  return Math.floor(100000 + Math.random() * 900000);
 }
 
 /*
   Function for bulksmsbd
 */
-const sendOtpToUser = async (phone, otp) => {
+const sendOtpToUser = async (phone, message) => {
   return { status: "success" };
 
   try {
     const url = process.env.SMS_GW_URL;
     const apiKey = process.env.SMS_GW_API_KEY;
 
-    const msgBody =
-      "Your Stocksupporter Verification OTP Code is " + otp.toString();
-
     const response = await axios.post(url, {
       api_key: apiKey,
       type: "text",
       number: "88" + phone,
       senderid: "8809617620371",
-      message: msgBody,
+      message: message,
     });
 
     if (response?.data?.response_code == 202) {
@@ -64,17 +61,14 @@ const sendOtpToUser = async (phone, otp) => {
 /*
   Function for sms.net.bd
 */
-// const sendOtpToUser = async (phone, otp) => {
+// const sendOtpToUser = async (phone, message) => {
 //   try {
 //     const url = process.env.SMS_GW_URL;
 //     const apiKey = process.env.SMS_GW_API_KEY;
 
-//     const msgBody =
-//       "Your Stocksupporter Verification OTP Code is " + otp.toString();
-
 //     const response = await axios.post(url, {
 //       api_key: apiKey,
-//       msg: msgBody,
+//       msg: message,
 //       to: phone,
 //     });
 

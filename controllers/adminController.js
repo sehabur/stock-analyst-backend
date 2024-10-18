@@ -9,7 +9,7 @@ const Setting = require("../models/settingModel");
   @access:    public
 */
 const getDataScriptLogs = async (req, res) => {
-  const logs = await ScriptLog.find().sort({ time: -1 }).limit(100);
+  const logs = await ScriptLog.find().sort({ time: -1 }).limit(200);
   return res.status(200).json(logs);
 };
 
@@ -19,7 +19,7 @@ const getDataScriptLogs = async (req, res) => {
   @access:    public
 */
 const getDataScriptErrors = async (req, res) => {
-  const logs = await ScriptError.find().sort({ time: -1 }).limit(100);
+  const logs = await ScriptError.find().sort({ time: -1 }).limit(200);
   return res.status(200).json(logs);
 };
 

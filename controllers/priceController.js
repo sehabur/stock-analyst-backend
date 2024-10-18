@@ -1,6 +1,6 @@
 const url = require("url");
 const { DateTime } = require("luxon");
-const createError = require("http-errors");
+// const createError = require("http-errors");
 const axios = require("axios");
 const { JSDOM } = require("jsdom");
 
@@ -12,7 +12,7 @@ const LatestPrice = require("../models/latestPriceModel");
 const News = require("../models/newsModel");
 const BlockTr = require("../models/blockTranxModel");
 const MinuteIndex = require("../models/minuteIndexModel");
-const DailyIndex = require("../models/dailyIndexModel");
+// const DailyIndex = require("../models/dailyIndexModel");
 const Setting = require("../models/settingModel");
 const DayMinutePrice = require("../models/onedayMinutePriceModel");
 const Ipo = require("../models/ipoModel");
@@ -24,7 +24,7 @@ const {
   sectorList,
   circuitUpMoveRange,
   circuitDownMoveRange,
-  ds30Shares,
+  // ds30Shares,
   dsexShares,
 } = require("../data/dse");
 
@@ -144,7 +144,7 @@ const getBarsTvchart = async (req, res) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
-              ltp: { $ne: 0 },
+              close: { $ne: 0 },
             },
           },
           {
@@ -159,7 +159,7 @@ const getBarsTvchart = async (req, res) => {
               open: { $first: "$ltp" },
               high: { $last: "$high" },
               low: { $last: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               volume: { $last: "$volume" },
@@ -466,8 +466,8 @@ const getBarsTvchart = async (req, res) => {
         },
         {
           $addFields: {
-            ltp: {
-              $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+            close: {
+              $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
             },
           },
         },
@@ -522,7 +522,7 @@ const getBarsTvchart = async (req, res) => {
             high: { $avg: "$high" },
             low: { $avg: "$low" },
             open: { $avg: "$ycp" },
-            close: { $avg: "$ltp" },
+            close: { $avg: "$close" },
             // trade: { $sum: "$trade" },
             // value: { $sum: "$value" },
             volume: { $sum: "$volume" },
@@ -789,8 +789,8 @@ const latestPrice = async (req, res, next) => {
     },
     {
       $addFields: {
-        ltp: {
-          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        close: {
+          $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
         },
       },
     },
@@ -904,8 +904,8 @@ const latestPrice = async (req, res, next) => {
           },
           {
             $addFields: {
-              ltp: {
-                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              close: {
+                $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
               },
             },
           },
@@ -979,12 +979,12 @@ const latestPrice = async (req, res, next) => {
               volume: { $round: ["$volume", 2] },
               value: { $round: ["$value", 2] },
               trade: { $round: ["$trade", 2] },
-              change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
+              change: { $round: [{ $subtract: ["$close", "$ycp"] }, 2] },
               percentChange: {
                 $round: [
                   {
                     $multiply: [
-                      { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+                      { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
                       100,
                     ],
                   },
@@ -1032,7 +1032,7 @@ const indexMover = async (req, res, next) => {
   const latestPrice = await LatestPrice.aggregate([
     {
       $match: {
-        ltp: { $ne: 0 },
+        close: { $ne: 0 },
       },
     },
     {
@@ -1051,7 +1051,7 @@ const indexMover = async (req, res, next) => {
         tradingCode: 1,
         marketCap: "$fundamentals.marketCap",
         open: "$ycp",
-        ltp: 1,
+        close: 1,
       },
     },
   ]);
@@ -1084,7 +1084,7 @@ const indexMover = async (req, res, next) => {
     ...stock,
     indexMove: Number(
       (
-        ((stock.ltp - stock.open) * stock.marketCap * index[0].dsex.index) /
+        ((stock.close - stock.open) * stock.marketCap * index[0].dsex.index) /
         (stock.open * totalMarketCap)
       ).toFixed(2)
     ),
@@ -1125,8 +1125,8 @@ const allStockBeta = async (req, res, next) => {
   const beta = await LatestPrice.aggregate([
     {
       $addFields: {
-        ltp: {
-          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        close: {
+          $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
         },
       },
     },
@@ -1145,7 +1145,7 @@ const allStockBeta = async (req, res, next) => {
         _id: 0,
         tradingCode: 1,
         beta: "$fundamentals.technicals.beta",
-        ltp: 1,
+        close: 1,
       },
     },
   ]);
@@ -1297,8 +1297,8 @@ const sectorLatestPrice = async (req, res, next) => {
   const price = await LatestPrice.aggregate([
     {
       $addFields: {
-        ltp: {
-          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        close: {
+          $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
         },
       },
     },
@@ -1308,7 +1308,7 @@ const sectorLatestPrice = async (req, res, next) => {
         pipeline: [
           {
             $addFields: {
-              ltp: "$price",
+              close: "$price",
             },
           },
         ],
@@ -1357,7 +1357,7 @@ const sectorLatestPrice = async (req, res, next) => {
             $cond: [{ $eq: ["$change", 0] }, "$tradingCode", 0],
           },
         },
-        ltp: { $avg: "$ltp" },
+        close: { $avg: "$close" },
         ycp: { $avg: "$ycp" },
         valueTotal: { $sum: "$value" },
       },
@@ -1378,13 +1378,13 @@ const sectorLatestPrice = async (req, res, next) => {
         uptrendItems: 1,
         downtrendItems: 1,
         neutralItems: 1,
-        ltp: { $round: ["$ltp", 2] },
-        change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
+        close: { $round: ["$close", 2] },
+        change: { $round: [{ $subtract: ["$close", "$ycp"] }, 2] },
         percentChange: {
           $round: [
             {
               $multiply: [
-                { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+                { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
                 100,
               ],
             },
@@ -1433,8 +1433,8 @@ const dailySectorPrice = async (req, res, next) => {
         pipeline: [
           {
             $addFields: {
-              ltp: {
-                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              close: {
+                $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
               },
             },
           },
@@ -1449,8 +1449,7 @@ const dailySectorPrice = async (req, res, next) => {
         ycp: { $avg: "$minute_prices.ycp" },
         high: { $avg: "$minute_prices.high" },
         low: { $avg: "$minute_prices.low" },
-        close: { $avg: "$minute_prices.ltp" },
-        // change: { $avg: "$minute_prices.change" },
+        close: { $avg: "$minute_prices.close" },
         trade: { $sum: "$minute_prices.trade" },
         value: { $sum: "$minute_prices.value" },
         volume: { $sum: "$minute_prices.volume" },
@@ -1458,10 +1457,10 @@ const dailySectorPrice = async (req, res, next) => {
     },
     {
       $addFields: {
-        change: { $subtract: ["$ltp", "$ycp"] },
+        change: { $subtract: ["$close", "$ycp"] },
         percentChange: {
           $multiply: [
-            { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+            { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
             100,
           ],
         },
@@ -1527,8 +1526,8 @@ const dailySectorPrice = async (req, res, next) => {
           },
           {
             $addFields: {
-              ltp: {
-                $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+              close: {
+                $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
               },
             },
           },
@@ -1600,12 +1599,12 @@ const dailySectorPrice = async (req, res, next) => {
               low: { $round: ["$low", 2] },
               close: { $round: ["$close", 2] },
               open: { $round: ["$open", 2] },
-              change: { $round: [{ $subtract: ["$ltp", "$ycp"] }, 2] },
+              change: { $round: [{ $subtract: ["$close", "$ycp"] }, 2] },
               percentChange: {
                 $round: [
                   {
                     $multiply: [
-                      { $divide: [{ $subtract: ["$ltp", "$ycp"] }, "$ycp"] },
+                      { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
                       100,
                     ],
                   },
@@ -1751,9 +1750,10 @@ const technicals = async (req, res, next) => {
     ema50,
     ema100,
     ema200,
-  } = data.technicals.movingAverages;
+  } = data?.technicals?.movingAverages;
 
-  const { rsi, stoch, adx, williamR, mfi, macd } = data.technicals.oscillators;
+  const { rsi, stoch, adx, williamR, mfi, macd } =
+    data?.technicals?.oscillators;
 
   res.status(200).json({
     sma10,
@@ -1775,124 +1775,6 @@ const technicals = async (req, res, next) => {
     mfi,
     macd,
     pivots: data.technicals.pivots,
-  });
-};
-
-/*
-  @api:       GET /api/prices/technical/stock/:code
-  @desc:      get stock technicals
-  @access:    public
-*/
-const technicalsOldVersion = async (req, res, next) => {
-  const tradingCode = req.params.code;
-
-  const queryLimit = 500;
-
-  const dailyPrice = await DailyPrice.aggregate([
-    {
-      $match: {
-        tradingCode,
-      },
-    },
-    {
-      $sort: {
-        date: -1,
-      },
-    },
-    {
-      $limit: queryLimit,
-    },
-    {
-      $sort: {
-        date: 1,
-      },
-    },
-    {
-      $project: {
-        date: 1,
-        high: 1,
-        low: 1,
-        ltp: 1,
-        ycp: 1,
-        volume: 1,
-      },
-    },
-  ]);
-
-  // const prices = dailyPrice.map((item) => item.ltp);
-  // const lows = dailyPrice.map((item) => item.low);
-  // const highs = dailyPrice.map((item) => item.high);
-  // const volumes = dailyPrice.map((item) => item.volume);
-
-  let prices = [];
-  let lows = [];
-  let highs = [];
-  let volumes = [];
-  let ohlc = [];
-
-  for (let item of dailyPrice) {
-    prices.push(item.ltp !== 0 ? item.ltp : item.ycp);
-    lows.push(item.low !== 0 ? item.low : item.ycp);
-    highs.push(item.high !== 0 ? item.high : item.ycp);
-    volumes.push(item.volume);
-    ohlc.push({
-      close: item.ltp !== 0 ? item.ltp : item.ycp,
-      high: item.high !== 0 ? item.high : item.ycp,
-      low: item.low !== 0 ? item.low : item.ycp,
-    });
-  }
-
-  const sma10 = calculateSmaLastValue(prices, 10);
-  const sma20 = calculateSmaLastValue(prices, 20);
-  const sma30 = calculateSmaLastValue(prices, 30);
-  const sma50 = calculateSmaLastValue(prices, 50);
-  const sma100 = calculateSmaLastValue(prices, 100);
-  const sma200 = calculateSmaLastValue(prices, 200);
-
-  const ema10 = calculateEmaLastValue(prices, 10);
-  const ema20 = calculateEmaLastValue(prices, 20);
-  const ema30 = calculateEmaLastValue(prices, 30);
-  const ema50 = calculateEmaLastValue(prices, 50);
-  const ema100 = calculateEmaLastValue(prices, 100);
-  const ema200 = calculateEmaLastValue(prices, 200);
-
-  const rsi = calculateRsiLastValue(prices);
-  const stoch = calculateStochasticKLastValue(ohlc);
-  const adx = calculateAdxLastValue(highs, lows, prices);
-  const williamR = calculateWilliamsPercentRLastValue(highs, lows, prices);
-  const mfi = calculateMoneyFlowIndexLastValue(highs, lows, prices, volumes);
-  const macd = calculateMacdLastValue(prices);
-
-  const lastPrice = dailyPrice[dailyPrice.length - 1];
-
-  const pivots = calculatePivotPoints(
-    lastPrice.high,
-    lastPrice.low,
-    lastPrice.ltp
-  );
-
-  // console.log(prices, rsi, stoch, adx, williamR, mfi, macd, lastPrice, pivots);
-
-  res.status(200).json({
-    sma10,
-    sma20,
-    sma30,
-    sma50,
-    sma100,
-    sma200,
-    ema10,
-    ema20,
-    ema30,
-    ema50,
-    ema100,
-    ema200,
-    rsi,
-    stoch,
-    adx,
-    williamR,
-    mfi,
-    macd,
-    pivots,
   });
 };
 
@@ -1932,7 +1814,7 @@ const stockDetails = async (req, res, next) => {
         latest: [
           {
             $match: {
-              ltp: { $gt: 0 },
+              close: { $gt: 0 },
             },
           },
           {
@@ -1969,6 +1851,7 @@ const stockDetails = async (req, res, next) => {
             $project: {
               time: 1,
               ltp: 1,
+              close: 1,
               ycp: 1,
               value: 1,
               volume: 1,
@@ -2017,7 +1900,7 @@ const stockDetails = async (req, res, next) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
-              ltp: { $gt: 0 },
+              close: { $gt: 0 },
             },
           },
           // {
@@ -2039,7 +1922,7 @@ const stockDetails = async (req, res, next) => {
               open: { $first: "$ltp" },
               high: { $last: "$high" },
               low: { $last: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               // change: { $last: "$change" },
@@ -2091,7 +1974,7 @@ const stockDetails = async (req, res, next) => {
         weekly: [
           {
             $match: {
-              ltp: { $ne: 0 },
+              close: { $ne: 0 },
             },
           },
           {
@@ -2124,7 +2007,7 @@ const stockDetails = async (req, res, next) => {
               open: { $first: "$open" },
               high: { $max: "$high" },
               low: { $min: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               volume: { $sum: "$volume" },
@@ -2146,7 +2029,7 @@ const stockDetails = async (req, res, next) => {
         monthly: [
           {
             $match: {
-              ltp: { $ne: 0 },
+              close: { $ne: 0 },
             },
           },
           {
@@ -2170,7 +2053,7 @@ const stockDetails = async (req, res, next) => {
               open: { $first: "$open" },
               high: { $max: "$high" },
               low: { $min: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               volume: { $sum: "$volume" },
@@ -2237,7 +2120,7 @@ const stockDetails = async (req, res, next) => {
     });
   }
 
-  const ltp = latestPrice.ltp;
+  const close = latestPrice.close;
   const ycp = latestPrice.ycp;
 
   const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
@@ -2263,10 +2146,10 @@ const stockDetails = async (req, res, next) => {
     },
     {
       $addFields: {
-        ltp: {
+        close: {
           $cond: [
-            { $gt: ["$latest_prices.ltp", 0] },
-            "$latest_prices.ltp",
+            { $gt: ["$latest_prices.close", 0] },
+            "$latest_prices.close",
             "$latest_prices.ycp",
           ],
         },
@@ -2280,7 +2163,7 @@ const stockDetails = async (req, res, next) => {
           $round: [
             {
               $divide: [
-                "$ltp",
+                "$close",
                 {
                   $cond: [{ $eq: ["$epsCurrent", 0] }, 0.000001, "$epsCurrent"],
                 },
@@ -2294,7 +2177,7 @@ const stockDetails = async (req, res, next) => {
             {
               $divide: [
                 {
-                  $multiply: ["$ltp", "$totalShares"],
+                  $multiply: ["$close", "$totalShares"],
                 },
                 // "$screener.bookValue.value",
                 {
@@ -2313,7 +2196,7 @@ const stockDetails = async (req, res, next) => {
           $round: [
             {
               $divide: [
-                "$ltp",
+                "$close",
                 {
                   $cond: [
                     { $eq: ["$screener.nocfpsQuarterly.value", 0] },
@@ -2334,13 +2217,13 @@ const stockDetails = async (req, res, next) => {
   const formatRatioValues = (type, title, changeColorReverse = false) => {
     let value, period;
     if (type === "pe") {
-      value = Number((ltp / fundamentalsBasic.epsCurrent).toFixed(2));
+      value = Number((close / fundamentalsBasic.epsCurrent).toFixed(2));
       period = "Current";
     }
     if (type === "pbv") {
       value = Number(
         (
-          (ltp * fundamentalsBasic.totalShares) /
+          (close * fundamentalsBasic.totalShares) /
           fundamentalsBasic.screener.bookValue.value
         ).toFixed(2)
       );
@@ -2348,7 +2231,7 @@ const stockDetails = async (req, res, next) => {
     }
     if (type === "pcf") {
       value = Number(
-        (ltp / fundamentalsBasic.screener.nocfpsQuarterly.value).toFixed(2)
+        (close / fundamentalsBasic.screener.nocfpsQuarterly.value).toFixed(2)
       );
       period = fundamentalsBasic.screener.nocfpsQuarterly.period;
     }
@@ -2558,6 +2441,7 @@ const indexDetails = async (req, res, next) => {
             $project: {
               time: 1,
               ltp: { $round: ["$index", 2] },
+              close: { $round: ["$index", 2] },
               value: 1,
               volume: 1,
               trade: 1,
@@ -2693,7 +2577,7 @@ const indexDetails = async (req, res, next) => {
               open: { $first: "$open" },
               high: { $max: "$high" },
               low: { $min: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               volume: { $sum: "$volume" },
@@ -2739,7 +2623,7 @@ const indexDetails = async (req, res, next) => {
               open: { $first: "$open" },
               high: { $max: "$high" },
               low: { $min: "$low" },
-              close: { $last: "$ltp" },
+              close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
               volume: { $sum: "$volume" },
@@ -3077,7 +2961,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3107,7 +2991,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3137,7 +3021,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3167,7 +3051,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3197,7 +3081,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3227,7 +3111,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3257,7 +3141,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3287,7 +3171,7 @@ const topGainerLoser = async (req, res, next) => {
               tradingCode: 1,
               percentChange: 1,
               change: 1,
-              ltp: 1,
+              close: 1,
               volume: 1,
               value: 1,
               trade: 1,
@@ -3360,8 +3244,8 @@ const allGainerLoser = async (req, res, next) => {
     { $unwind: { path: "$halt_shares", preserveNullAndEmptyArrays: true } },
     {
       $addFields: {
-        ltp: {
-          $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+        close: {
+          $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
         },
       },
     },
@@ -3372,7 +3256,7 @@ const allGainerLoser = async (req, res, next) => {
             { $gt: ["$yesterday_price.oneWeekBeforeData", 0] },
             {
               $round: [
-                { $subtract: ["$ltp", "$yesterday_price.oneWeekBeforeData"] },
+                { $subtract: ["$close", "$yesterday_price.oneWeekBeforeData"] },
                 2,
               ],
             },
@@ -3384,7 +3268,9 @@ const allGainerLoser = async (req, res, next) => {
             { $gt: ["$yesterday_price.oneMonthBeforeData", 0] },
             {
               $round: [
-                { $subtract: ["$ltp", "$yesterday_price.oneMonthBeforeData"] },
+                {
+                  $subtract: ["$close", "$yesterday_price.oneMonthBeforeData"],
+                },
                 2,
               ],
             },
@@ -3396,7 +3282,9 @@ const allGainerLoser = async (req, res, next) => {
             { $gt: ["$yesterday_price.sixMonthBeforeData", 0] },
             {
               $round: [
-                { $subtract: ["$ltp", "$yesterday_price.sixMonthBeforeData"] },
+                {
+                  $subtract: ["$close", "$yesterday_price.sixMonthBeforeData"],
+                },
                 2,
               ],
             },
@@ -3408,7 +3296,7 @@ const allGainerLoser = async (req, res, next) => {
             { $gt: ["$yesterday_price.oneYearBeforeData", 0] },
             {
               $round: [
-                { $subtract: ["$ltp", "$yesterday_price.oneYearBeforeData"] },
+                { $subtract: ["$close", "$yesterday_price.oneYearBeforeData"] },
                 2,
               ],
             },
@@ -3420,7 +3308,9 @@ const allGainerLoser = async (req, res, next) => {
             { $gt: ["$yesterday_price.fiveYearBeforeData", 0] },
             {
               $round: [
-                { $subtract: ["$ltp", "$yesterday_price.fiveYearBeforeData"] },
+                {
+                  $subtract: ["$close", "$yesterday_price.fiveYearBeforeData"],
+                },
                 2,
               ],
             },
@@ -3438,7 +3328,7 @@ const allGainerLoser = async (req, res, next) => {
                       $divide: [
                         {
                           $subtract: [
-                            "$ltp",
+                            "$close",
                             "$yesterday_price.oneWeekBeforeData",
                           ],
                         },
@@ -3465,7 +3355,7 @@ const allGainerLoser = async (req, res, next) => {
                       $divide: [
                         {
                           $subtract: [
-                            "$ltp",
+                            "$close",
                             "$yesterday_price.oneMonthBeforeData",
                           ],
                         },
@@ -3492,7 +3382,7 @@ const allGainerLoser = async (req, res, next) => {
                       $divide: [
                         {
                           $subtract: [
-                            "$ltp",
+                            "$close",
                             "$yesterday_price.sixMonthBeforeData",
                           ],
                         },
@@ -3519,7 +3409,7 @@ const allGainerLoser = async (req, res, next) => {
                       $divide: [
                         {
                           $subtract: [
-                            "$ltp",
+                            "$close",
                             "$yesterday_price.oneYearBeforeData",
                           ],
                         },
@@ -3546,7 +3436,7 @@ const allGainerLoser = async (req, res, next) => {
                       $divide: [
                         {
                           $subtract: [
-                            "$ltp",
+                            "$close",
                             "$yesterday_price.fiveYearBeforeData",
                           ],
                         },
@@ -3695,7 +3585,7 @@ const allGainerLoser = async (req, res, next) => {
         date: 1,
         time: 1,
         tradingCode: 1,
-        ltp: 1,
+        close: 1,
         change: 1,
         percentChange: 1,
         category: 1,
@@ -3843,10 +3733,10 @@ const screener = async (req, res, next) => {
     },
     {
       $addFields: {
-        ltp: {
+        close: {
           $cond: [
-            { $gt: ["$latest_prices.ltp", 0] },
-            "$latest_prices.ltp",
+            { $gt: ["$latest_prices.close", 0] },
+            "$latest_prices.close",
             "$latest_prices.ycp",
           ],
         },
@@ -3861,35 +3751,35 @@ const screener = async (req, res, next) => {
           $cond: [
             { $gt: ["$lastday_prices.oneMonthBeforeData", 0] },
             "$lastday_prices.oneMonthBeforeData",
-            "$ltp",
+            "$close",
           ],
         },
         oneWeekBeforeLtp: {
           $cond: [
             { $gt: ["$lastday_prices.oneWeekBeforeData", 0] },
             "$lastday_prices.oneWeekBeforeData",
-            "$ltp",
+            "$close",
           ],
         },
         sixMonthBeforeLtp: {
           $cond: [
             { $gt: ["$lastday_prices.sixMonthBeforeData", 0] },
             "$lastday_prices.sixMonthBeforeData",
-            "$ltp",
+            "$close",
           ],
         },
         oneYearBeforeLtp: {
           $cond: [
             { $gt: ["$lastday_prices.oneYearBeforeData", 0] },
             "$lastday_prices.oneYearBeforeData",
-            "$ltp",
+            "$close",
           ],
         },
         fiveYearBeforeLtp: {
           $cond: [
             { $gt: ["$lastday_prices.fiveYearBeforeData", 0] },
             "$lastday_prices.fiveYearBeforeData",
-            "$ltp",
+            "$close",
           ],
         },
       },
@@ -3900,7 +3790,7 @@ const screener = async (req, res, next) => {
         _id: 0,
         tradingCode: 1,
         sector: 1,
-        ltp: 1,
+        close: 1,
         category: 1,
         epsCurrent: 1,
         volume: "$latest_prices.volume",
@@ -3911,7 +3801,7 @@ const screener = async (req, res, next) => {
               $multiply: [
                 {
                   $divide: [
-                    { $subtract: ["$ltp", "$oneWeekBeforeLtp"] },
+                    { $subtract: ["$close", "$oneWeekBeforeLtp"] },
                     "$oneWeekBeforeLtp",
                   ],
                 },
@@ -3927,7 +3817,7 @@ const screener = async (req, res, next) => {
               $multiply: [
                 {
                   $divide: [
-                    { $subtract: ["$ltp", "$oneMonthBeforeLtp"] },
+                    { $subtract: ["$close", "$oneMonthBeforeLtp"] },
                     "$oneMonthBeforeLtp",
                   ],
                 },
@@ -3943,7 +3833,7 @@ const screener = async (req, res, next) => {
               $multiply: [
                 {
                   $divide: [
-                    { $subtract: ["$ltp", "$sixMonthBeforeLtp"] },
+                    { $subtract: ["$close", "$sixMonthBeforeLtp"] },
                     "$sixMonthBeforeLtp",
                   ],
                 },
@@ -3959,7 +3849,7 @@ const screener = async (req, res, next) => {
               $multiply: [
                 {
                   $divide: [
-                    { $subtract: ["$ltp", "$oneYearBeforeLtp"] },
+                    { $subtract: ["$close", "$oneYearBeforeLtp"] },
                     "$oneYearBeforeLtp",
                   ],
                 },
@@ -3975,7 +3865,7 @@ const screener = async (req, res, next) => {
               $multiply: [
                 {
                   $divide: [
-                    { $subtract: ["$ltp", "$fiveYearBeforeLtp"] },
+                    { $subtract: ["$close", "$fiveYearBeforeLtp"] },
                     "$fiveYearBeforeLtp",
                   ],
                 },
@@ -4032,14 +3922,14 @@ const screener = async (req, res, next) => {
           ],
         },
         pe: {
-          $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
+          $round: [{ $divide: ["$close", "$epsCurrent"] }, 2],
         },
         pbv: {
           $round: [
             {
               $divide: [
                 {
-                  $multiply: ["$ltp", "$totalShares"],
+                  $multiply: ["$close", "$totalShares"],
                 },
                 {
                   $cond: [
@@ -4057,7 +3947,7 @@ const screener = async (req, res, next) => {
           $round: [
             {
               $divide: [
-                "$ltp",
+                "$close",
                 {
                   $cond: [
                     { $eq: ["$screener.nocfpsQuarterly.value", 0] },
@@ -4193,10 +4083,10 @@ const topFinancials = async (req, res, next) => {
     },
     {
       $addFields: {
-        ltp: {
+        close: {
           $cond: [
-            { $gt: ["$latest_prices.ltp", 0] },
-            "$latest_prices.ltp",
+            { $gt: ["$latest_prices.close", 0] },
+            "$latest_prices.close",
             "$latest_prices.ycp",
           ],
         },
@@ -4209,7 +4099,7 @@ const topFinancials = async (req, res, next) => {
       $project: {
         id: "$_id",
         tradingCode: 1,
-        ltp: 1,
+        close: 1,
         epsCurrent: 1,
         percentChange: "$latest_prices.percentChange",
         marketCap: {
@@ -4269,7 +4159,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$pe",
             },
@@ -4287,7 +4177,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$epsCurrent",
             },
@@ -4305,7 +4195,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$marketCap",
             },
@@ -4323,7 +4213,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$reserveSurplus",
             },
@@ -4348,7 +4238,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$roe",
             },
@@ -4366,7 +4256,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$roa",
             },
@@ -4384,7 +4274,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$currentRatio",
             },
@@ -4402,7 +4292,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$cashDividend",
             },
@@ -4420,7 +4310,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$revenue",
             },
@@ -4438,7 +4328,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$navYearly",
             },
@@ -4456,7 +4346,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$nocfpsYearly",
             },
@@ -4474,7 +4364,7 @@ const topFinancials = async (req, res, next) => {
           {
             $project: {
               tradingCode: 1,
-              ltp: 1,
+              close: 1,
               percentChange: 1,
               value: "$totalAsset",
             },
@@ -4544,7 +4434,7 @@ const marketDepth = async (req, res) => {
 
     const latestPrice = await LatestPrice.findOne({ tradingCode: inst });
 
-    const price = latestPrice.ltp;
+    const price = latestPrice.close;
     const ycp = latestPrice.ycp;
     const change = latestPrice.change;
 
@@ -4637,7 +4527,7 @@ const marketDepthAllInst = async (req, res) => {
 
     const latestPrice = await LatestPrice.findOne({ tradingCode: inst });
 
-    const price = latestPrice.ltp;
+    const price = latestPrice.close;
     const ycp = latestPrice.ycp;
     const change = latestPrice.change;
 
@@ -4715,6 +4605,124 @@ const marketDepthAllInst = async (req, res) => {
 */
 
 /*
+  @api:       GET /api/prices/technical/stock/:code
+  @desc:      get stock technicals
+  @access:    public
+*/
+const technicalsOldVersion = async (req, res, next) => {
+  const tradingCode = req.params.code;
+
+  const queryLimit = 500;
+
+  const dailyPrice = await DailyPrice.aggregate([
+    {
+      $match: {
+        tradingCode,
+      },
+    },
+    {
+      $sort: {
+        date: -1,
+      },
+    },
+    {
+      $limit: queryLimit,
+    },
+    {
+      $sort: {
+        date: 1,
+      },
+    },
+    {
+      $project: {
+        date: 1,
+        high: 1,
+        low: 1,
+        ltp: 1,
+        ycp: 1,
+        volume: 1,
+      },
+    },
+  ]);
+
+  // const prices = dailyPrice.map((item) => item.ltp);
+  // const lows = dailyPrice.map((item) => item.low);
+  // const highs = dailyPrice.map((item) => item.high);
+  // const volumes = dailyPrice.map((item) => item.volume);
+
+  let prices = [];
+  let lows = [];
+  let highs = [];
+  let volumes = [];
+  let ohlc = [];
+
+  for (let item of dailyPrice) {
+    prices.push(item.ltp !== 0 ? item.ltp : item.ycp);
+    lows.push(item.low !== 0 ? item.low : item.ycp);
+    highs.push(item.high !== 0 ? item.high : item.ycp);
+    volumes.push(item.volume);
+    ohlc.push({
+      close: item.ltp !== 0 ? item.ltp : item.ycp,
+      high: item.high !== 0 ? item.high : item.ycp,
+      low: item.low !== 0 ? item.low : item.ycp,
+    });
+  }
+
+  const sma10 = calculateSmaLastValue(prices, 10);
+  const sma20 = calculateSmaLastValue(prices, 20);
+  const sma30 = calculateSmaLastValue(prices, 30);
+  const sma50 = calculateSmaLastValue(prices, 50);
+  const sma100 = calculateSmaLastValue(prices, 100);
+  const sma200 = calculateSmaLastValue(prices, 200);
+
+  const ema10 = calculateEmaLastValue(prices, 10);
+  const ema20 = calculateEmaLastValue(prices, 20);
+  const ema30 = calculateEmaLastValue(prices, 30);
+  const ema50 = calculateEmaLastValue(prices, 50);
+  const ema100 = calculateEmaLastValue(prices, 100);
+  const ema200 = calculateEmaLastValue(prices, 200);
+
+  const rsi = calculateRsiLastValue(prices);
+  const stoch = calculateStochasticKLastValue(ohlc);
+  const adx = calculateAdxLastValue(highs, lows, prices);
+  const williamR = calculateWilliamsPercentRLastValue(highs, lows, prices);
+  const mfi = calculateMoneyFlowIndexLastValue(highs, lows, prices, volumes);
+  const macd = calculateMacdLastValue(prices);
+
+  const lastPrice = dailyPrice[dailyPrice.length - 1];
+
+  const pivots = calculatePivotPoints(
+    lastPrice.high,
+    lastPrice.low,
+    lastPrice.ltp
+  );
+
+  // console.log(prices, rsi, stoch, adx, williamR, mfi, macd, lastPrice, pivots);
+
+  res.status(200).json({
+    sma10,
+    sma20,
+    sma30,
+    sma50,
+    sma100,
+    sma200,
+    ema10,
+    ema20,
+    ema30,
+    ema50,
+    ema100,
+    ema200,
+    rsi,
+    stoch,
+    adx,
+    williamR,
+    mfi,
+    macd,
+    pivots,
+  });
+};
+
+/*
   @api:       GET /api/prices/latestPricesBySearch?search={search}
   @desc:      get latest share prices for all shares
   @access:    public
@@ -4760,6 +4768,7 @@ const latestPricesBySearch = async (req, res, next) => {
 /*
   test function
 */
+
 const pytest = async (req, res, next) => {
   const dailySector = await DailyPrice.aggregate([
     {
@@ -4989,7 +4998,6 @@ module.exports = {
   getIpoList,
   latestPrice,
   indexMover,
-  latestPricesBySearch,
   sectorGainValueSummary,
   sectorLatestPrice,
   dailySectorPrice,

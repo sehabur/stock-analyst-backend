@@ -26,6 +26,9 @@ const {
   resetNewNotifications,
   verifyPhone,
   generateOtp,
+  changePassword,
+  resetPasswordLink,
+  setNewPassword,
 } = require("../controllers/userController");
 
 const { checkLogin } = require("../middlewares/authMiddleware");
@@ -34,6 +37,7 @@ const {
   registerValidationMiddleware,
 } = require("../middlewares/validationMiddlewares/registerValidationMiddleware");
 
+// Portfolio //
 router
   .route("/portfolio")
   .get(checkLogin, getAllPortfolioByUser)
@@ -66,6 +70,12 @@ router.post("/scheduleNewsAlert", scheduleNewsAlert);
 router.post("/signin", signin);
 
 router.post("/signup", registerValidationMiddleware, signup);
+
+router.post("/changePassword", checkLogin, changePassword);
+
+router.post("/resetPasswordLink", resetPasswordLink);
+
+router.post("/setNewPassword", setNewPassword);
 
 router
   .route("/profile/:id")
