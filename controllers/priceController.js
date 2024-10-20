@@ -4111,7 +4111,7 @@ const topFinancials = async (req, res, next) => {
           ],
         },
         pe: {
-          $round: [{ $divide: ["$ltp", "$epsCurrent"] }, 2],
+          $round: [{ $divide: ["$close", "$epsCurrent"] }, 2],
         },
         reserveSurplus: "$screener.reserveSurplus.value",
         roe: "$screener.roe.value",
