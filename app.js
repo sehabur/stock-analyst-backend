@@ -1,7 +1,10 @@
 // External imports //
 var express = require("express");
+const fs = require("fs");
+const path = require("path");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const morgan = require("morgan");
 
 // Internal imports //
 const priceRoute = require("./routes/priceRoute");
@@ -15,6 +18,7 @@ const {
   NotFoundHanlder,
   ErrorHanlder,
 } = require("./middlewares/errorHandlingMiddleware");
+const { formatDate } = require("./helper/price");
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV || "production"}` });
 
@@ -23,6 +27,11 @@ var app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+app.use((req, res, next) => {
+  console.log(req.headers);
+  next();
+});
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // For devlopment purpose //
@@ -36,6 +45,17 @@ app.use((req, res, next) => {
   );
   next();
 });
+
+// morgan.token('ip', (req) => req.ip);
+
+app.use(
+  morgan("combined", {
+    stream: fs.createWriteStream(
+      path.join(__dirname, "logs", formatDate() + "_access.log"),
+      { flags: "a" }
+    ),
+  })
+);
 
 app.use("/api/prices", priceRoute);
 app.use("/api/users", userRoute);

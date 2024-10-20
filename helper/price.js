@@ -1,3 +1,11 @@
+const formatDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0"); // getMonth() is zero-indexed
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const marketStatusHelper = async (
   dataInsertionEnable,
   openHour,
@@ -154,6 +162,7 @@ function calculateBeta(stockData, marketData) {
 }
 
 module.exports = {
+  formatDate,
   marketStatusHelper,
   // getMarketOpenStatus,
   calculateBeta,
