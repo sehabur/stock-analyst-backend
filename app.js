@@ -29,11 +29,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {
-  console.log(req.headers);
-  next();
-});
-
-app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*"); // For devlopment purpose //
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -47,6 +42,8 @@ app.use((req, res, next) => {
 });
 
 // morgan.token('ip', (req) => req.ip);
+
+app.set("trust proxy", true);
 
 app.use(
   morgan("combined", {
