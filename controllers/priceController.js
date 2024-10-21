@@ -609,7 +609,8 @@ const getMarketStatus = async (req, res, next) => {
     dataFetchStartMinute,
     dataFetchEndHour,
     dataFetchEndMinute,
-    currentAppVersionCode,
+    androidVersionCode,
+    iosVersionCode,
   } = await Setting.findOne();
 
   const { statusText, isOpen } = await marketStatusHelper(
@@ -638,7 +639,8 @@ const getMarketStatus = async (req, res, next) => {
     dataFetchStartMinute,
     dataFetchEndHour,
     dataFetchEndMinute,
-    currentAppVersionCode,
+    androidVersionCode,
+    iosVersionCode,
   });
 };
 
