@@ -59,6 +59,12 @@ const settingSchema = mongoose.Schema(
     dataFetchEndMinute: {
       type: Number,
     },
+    androidVersionCode: {
+      type: Number,
+    },
+    iosVersionCode: {
+      type: Number,
+    },
   },
   {
     timestamps: true,
