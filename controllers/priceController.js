@@ -1825,60 +1825,21 @@ const stockDetails = async (req, res, next) => {
         tradingCode,
       },
     },
+
     {
-      $facet: {
-        latest: [
-          {
-            $match: {
-              close: { $gt: 0 },
-            },
-          },
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              date: { $last: "$date" },
-              time: { $last: "$time" },
-              open: { $first: "$ltp" },
-              high: { $last: "$high" },
-              low: { $last: "$low" },
-              close: { $last: "$close" },
-              ltp: { $last: "$ltp" },
-              ycp: { $first: "$ycp" },
-              change: { $last: "$change" },
-              percentChange: { $last: "$percentChange" },
-              trade: { $last: "$trade" },
-              volume: { $last: "$volume" },
-              value: { $last: "$value" },
-            },
-          },
-        ],
-        minute: [
-          {
-            $sort: {
-              time: 1,
-            },
-          },
-          {
-            $project: {
-              time: 1,
-              ltp: 1,
-              close: 1,
-              ycp: 1,
-              value: 1,
-              volume: 1,
-              trade: 1,
-            },
-          },
-        ],
+      $sort: {
+        time: 1,
       },
     },
     {
-      $unwind: "$latest",
+      $project: {
+        time: 1,
+        ltp: 1,
+        close: 1,
+        volume: 1,
+        value: 1,
+        trade: 1,
+      },
     },
   ]);
 
@@ -1907,6 +1868,15 @@ const stockDetails = async (req, res, next) => {
       },
     },
     {
+      $addFields: {
+        open: { $cond: [{ $gt: ["$open", 0] }, "$open", "$ycp"] },
+        high: { $cond: [{ $gt: ["$high", 0] }, "$high", "$ycp"] },
+        low: { $cond: [{ $gt: ["$low", 0] }, "$low", "$ycp"] },
+        close: { $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"] },
+        ltp: { $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"] },
+      },
+    },
+    {
       $unionWith: {
         coll: "day_minute_prices",
         pipeline: [
@@ -1916,16 +1886,9 @@ const stockDetails = async (req, res, next) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
-              // close: { $gt: 0 },
+              ltp: { $gt: 0 },
             },
           },
-          // {
-          //   $addFields: {
-          //     ltp: {
-          //       $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
-          //     },
-          //   },
-          // },
           {
             $sort: {
               time: 1,
@@ -1941,25 +1904,17 @@ const stockDetails = async (req, res, next) => {
               close: { $last: "$close" },
               ltp: { $last: "$ltp" },
               ycp: { $first: "$ycp" },
+              change: { $last: "$change" },
+              percentChange: { $last: "$percentChange" },
               volume: { $last: "$volume" },
+              value: { $last: "$value" },
+              trade: { $last: "$trade" },
             },
           },
           {
             $project: { _id: 0 },
           },
         ],
-      },
-    },
-    {
-      $project: {
-        date: 1,
-        open: { $cond: [{ $gt: ["$open", 0] }, "$open", "$ycp"] },
-        high: { $cond: [{ $gt: ["$high", 0] }, "$high", "$ycp"] },
-        low: { $cond: [{ $gt: ["$low", 0] }, "$low", "$ycp"] },
-        close: { $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"] },
-        ltp: { $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"] },
-        ycp: 1,
-        volume: 1,
       },
     },
     {
@@ -1974,7 +1929,11 @@ const stockDetails = async (req, res, next) => {
               close: 1,
               ltp: 1,
               ycp: 1,
+              change: 1,
+              percentChange: 1,
               volume: 1,
+              value: 1,
+              trade: 1,
             },
           },
         ],
@@ -2090,35 +2049,62 @@ const stockDetails = async (req, res, next) => {
 
   const sector = fundamentalsBasic.sector;
 
-  let latestPrice;
+  let latestPrice = {};
 
-  if (minutePrice.length > 0) {
-    latestPrice = minutePrice[0].latest;
+  const lastDailyValue = dailyPrice[0].daily.pop();
+
+  const lastDailyValueUpdateTime = minutePrice[minutePrice.length - 1]["time"];
+
+  if (lastDailyValue.ltp == 0) {
+    const ycp = lastDailyValue.ycp;
+
+    latestPrice = {
+      ...lastDailyValue,
+      time: lastDailyValueUpdateTime,
+      open: ycp,
+      ltp: ycp,
+      high: ycp,
+      low: ycp,
+      close: ycp,
+      isNullDataAtDse: "YES",
+    };
   } else {
-    const price = await LatestPrice.aggregate([
-      {
-        $match: {
-          tradingCode,
-        },
-      },
-      {
-        $addFields: {
-          ltp: "$ycp",
-          open: "$ycp",
-          high: "$ycp",
-          low: "$ycp",
-          close: "$ycp",
-          isNullDataAtDse: "YES",
-        },
-      },
-    ]);
-    latestPrice = price[0];
-
-    minutePrice.push({
-      latest: latestPrice,
-      minute: [latestPrice],
-    });
+    latestPrice = {
+      ...lastDailyValue,
+      time: lastDailyValueUpdateTime,
+      isNullDataAtDse: "NO",
+    };
   }
+
+  dailyPrice[0].daily.push(latestPrice);
+
+  // if (minutePrice.length > 0) {
+  //   latestPrice = minutePrice[0].latest;
+  // } else {
+  //   const price = await LatestPrice.aggregate([
+  //     {
+  //       $match: {
+  //         tradingCode,
+  //       },
+  //     },
+  //     {
+  //       $addFields: {
+  //         ltp: "$ycp",
+  //         open: "$ycp",
+  //         high: "$ycp",
+  //         low: "$ycp",
+  //         close: "$ycp",
+  //         isNullDataAtDse: "YES",
+  //       },
+  //     },
+  //   ]);
+  //   latestPrice = price[0];
+
+  //   minutePrice.push({
+  //     latest: latestPrice,
+  //     minute: [latestPrice],
+  //   });
+  // }
 
   const close = latestPrice.close;
   const ycp = latestPrice.ycp;
@@ -2338,7 +2324,8 @@ const stockDetails = async (req, res, next) => {
   );
 
   res.status(200).json({
-    ...minutePrice[0],
+    latest: latestPrice,
+    minute: minutePrice,
     lastDay: yesterdayPrice,
     ...dailyPrice[0],
     fundamentals: { ...fundamentalsBasic._doc, ...fundamentalsExtended },
