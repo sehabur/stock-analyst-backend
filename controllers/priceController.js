@@ -156,7 +156,7 @@ const getBarsTvchart = async (req, res) => {
               date: {
                 $gt: dailyPriceUpdateDate,
               },
-              close: { $ne: 0 },
+              ltp: { $ne: 0 },
             },
           },
           {
