@@ -2,25 +2,24 @@ const mongoose = require("mongoose");
 
 const latestPriceSchema = mongoose.Schema(
   {
-    time: {
-      type: Date,
-      required: true,
-    },
-    ltp: {
-      type: Number,
-      required: true,
-    },
-    ycp: {
-      type: Number,
-      required: true,
-    },
-    change: {
-      type: Number,
-      required: true,
-    },
     tradingCode: {
       type: String,
       required: true,
+    },
+    time: {
+      type: Date,
+    },
+    close: {
+      type: Number,
+    },
+    ltp: {
+      type: Number,
+    },
+    ycp: {
+      type: Number,
+    },
+    change: {
+      type: Number,
     },
   },
   {

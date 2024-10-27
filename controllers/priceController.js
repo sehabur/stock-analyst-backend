@@ -4457,9 +4457,9 @@ const marketDepth = async (req, res) => {
   @access:    public
 */
 const marketDepthAllInst = async (req, res) => {
-  const allStocks = await LatestPrice.find();
+  // const allStocks = await LatestPrice.find();
 
-  // const allStocks = [{ tradingCode: "JUTESPINN" }];
+  const allStocks = [{ tradingCode: "ISLAMICFIN" }];
 
   const result = [];
 
@@ -4544,8 +4544,11 @@ const marketDepthAllInst = async (req, res) => {
 
     const upperCircuitLimitReached =
       change > 0 && circuitUp == price ? true : false;
+
     const lowerCircuitLimitReached =
       change < 0 && circuitLow == price ? true : false;
+
+    console.log(change, circuitLow, price, lowerCircuitLimitReached);
 
     const status =
       (upperCircuitLimitReached && initMarketDepthStatus == "buy") ||

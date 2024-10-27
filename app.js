@@ -13,6 +13,7 @@ const tvchartRoute = require("./routes/tvchartRoute");
 const dataInsertRoute = require("./routes/dataInsertRoute");
 const paymentRoute = require("./routes/paymentRoute");
 const adminRoute = require("./routes/adminRoute");
+const aiRoute = require("./routes/aiRoute");
 
 const {
   NotFoundHanlder,
@@ -60,6 +61,7 @@ app.use("/api/tvcharts", tvchartRoute);
 app.use("/api/dataInsert", dataInsertRoute);
 app.use("/api/payment", paymentRoute);
 app.use("/api/admin", adminRoute);
+app.use("/api/ai", aiRoute);
 
 // Catch 404 and forward to NotFoundHanlder //
 app.use(NotFoundHanlder);

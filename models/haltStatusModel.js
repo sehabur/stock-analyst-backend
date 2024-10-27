@@ -2,25 +2,27 @@ const mongoose = require("mongoose");
 
 const haltStatusSchema = mongoose.Schema(
   {
-    date: {
-      type: Date,
-      required: true,
-    },
-    time: {
-      type: Date,
-      required: true,
-    },
     tradingCode: {
       type: String,
       required: true,
     },
+    date: {
+      type: Date,
+    },
+    time: {
+      type: Date,
+    },
     initMarketDepthStatus: {
       type: String,
+      enum: ["sell", "buy", "none"],
     },
     upperCircuitLimitReached: {
       type: Boolean,
     },
     lowerCircuitLimitReached: {
+      type: Boolean,
+    },
+    circuitLimitReached: {
       type: Boolean,
     },
     totalBuyVolume: {
