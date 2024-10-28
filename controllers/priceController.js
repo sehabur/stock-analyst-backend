@@ -4457,16 +4457,14 @@ const marketDepth = async (req, res) => {
   @access:    public
 */
 const marketDepthAllInst = async (req, res) => {
-  // const allStocks = await LatestPrice.find();
-
-  const allStocks = [{ tradingCode: "ISLAMICFIN" }];
+  const allStocks = await LatestPrice.find();
+  // const allStocks = [{ tradingCode: "ISLAMICFIN" }];
 
   const result = [];
 
   for (let item of allStocks) {
     const inst = item.tradingCode;
-
-    console.log(inst, " -> start");
+    // console.log(inst, " -> start");
 
     const output = await axios.request({
       method: "post",
@@ -4516,30 +4514,6 @@ const marketDepthAllInst = async (req, res) => {
     const ycp = latestPrice.ycp;
     const change = latestPrice.change;
 
-    // const circuitUpRange = circuitUpMoveRange.find(
-    //   (item) => ycp >= item.min && ycp <= item.max
-    // ).value;
-
-    // const circuitDownRange = circuitDownMoveRange.find(
-    //   (item) => ycp >= item.min && ycp <= item.max
-    // ).value;
-
-    // const circuitUpPrice = Number(
-    //   (ycp + getNumWithFirstDecimalDigit((ycp * circuitUpRange) / 100)).toFixed(
-    //     2
-    //   )
-    // );
-    // const circuitDownPrice = Number(
-    //   (
-    //     ycp - getNumWithFirstDecimalDigit((ycp * circuitDownRange) / 100)
-    //   ).toFixed(2)
-    // );
-
-    // const circuitUpPrice =
-    //   Math.floor((ycp + (ycp * circuitUpRange) / 100) * 10) / 10;
-    // const circuitDownPrice =
-    //   Math.ceil((ycp - (ycp * circuitDownRange) / 100) * 10) / 10;
-
     const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
 
     const upperCircuitLimitReached =
@@ -4547,8 +4521,6 @@ const marketDepthAllInst = async (req, res) => {
 
     const lowerCircuitLimitReached =
       change < 0 && circuitLow == price ? true : false;
-
-    console.log(change, circuitLow, price, lowerCircuitLimitReached);
 
     const status =
       (upperCircuitLimitReached && initMarketDepthStatus == "buy") ||
@@ -4581,8 +4553,7 @@ const marketDepthAllInst = async (req, res) => {
       { upsert: true }
     );
 
-    console.log(inst, " : final status -> ", status);
-
+    // console.log(inst, " : final status -> ", status);
     result.push(inst);
   }
   res.status(200).json({ response: "success", items: result });
