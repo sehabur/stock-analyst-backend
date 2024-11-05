@@ -4457,8 +4457,8 @@ const marketDepth = async (req, res) => {
   @access:    public
 */
 const marketDepthAllInst = async (req, res) => {
-  const allStocks = await LatestPrice.find();
-  // const allStocks = [{ tradingCode: "ISLAMICFIN" }];
+  // const allStocks = await LatestPrice.find();
+  const allStocks = [{ tradingCode: "ARAMITCEM" }];
 
   const result = [];
 
@@ -4515,6 +4515,8 @@ const marketDepthAllInst = async (req, res) => {
     const change = latestPrice.change;
 
     const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
+
+    console.log(circuitUp, circuitLow, ycp);
 
     const upperCircuitLimitReached =
       change > 0 && circuitUp == price ? true : false;
@@ -4730,7 +4732,7 @@ const latestPricesBySearch = async (req, res, next) => {
 
 const getNumWithFirstDecimalDigit = (num) => {
   const intPart = Math.floor(num);
-  const decimalPart = Math.abs(num) % 1;
+  const decimalPart = Number((Math.abs(num) % 1).toFixed(3));
   return intPart + Math.floor(decimalPart * 10) / 10;
 };
 

@@ -24,7 +24,7 @@ const getStudyTemplate = async (req, res) => {
   if (getType === "all") {
     if (isPremiumEligible) {
       data = await StudyTemplate.find({
-        $or: [{ user: id }, { isPublic: true, isPremium: true }],
+        $or: [{ user: id }, { isPublic: true }],
       });
     } else {
       data = await StudyTemplate.find({

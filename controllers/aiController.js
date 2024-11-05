@@ -106,32 +106,32 @@ const getDataToFeed = async (tradingCode) => {
       candlestick: technicals.candlestick,
     },
     fundamentalRatio: {
-      priceToEarningRatio: pe.toFixed(2),
-      priceToBookValueRatio: pbv.toFixed(2),
+      priceToEarningRatio: pe?.toFixed(2),
+      priceToBookValueRatio: pbv?.toFixed(2),
       earningsPerShare: epsCurrent.toFixed(2),
-      priceToSalesRatio: screener.ps.value.toFixed(2),
-      debtToEquityRatio: screener.de.value.toFixed(2),
-      returnOfEquity: screener.roe.value.toFixed(2),
-      returnOfAssets: screener.roa.value.toFixed(2),
-      dividendYield: screener.dividendYield.value.toFixed(2),
-      currentRatio: screener.currentRatio.value.toFixed(2),
-      netIncomeRatio: screener.netIncomeRatio.value.toFixed(2),
-      NetOperatingCashFlowPerShare: screener.nocfpsQuarterly.value.toFixed(2),
-      NetAssetValue: screener.navQuarterly.value.toFixed(2),
+      priceToSalesRatio: screener.ps?.value.toFixed(2),
+      debtToEquityRatio: screener.de?.value.toFixed(2),
+      returnOfEquity: screener.roe?.value.toFixed(2),
+      returnOfAssets: screener.roa?.value.toFixed(2),
+      dividendYield: screener.dividendYield?.value.toFixed(2),
+      currentRatio: screener.currentRatio?.value.toFixed(2),
+      netIncomeRatio: screener.netIncomeRatio?.value.toFixed(2),
+      NetOperatingCashFlowPerShare: screener.nocfpsQuarterly?.value.toFixed(2),
+      NetAssetValue: screener.navQuarterly?.value.toFixed(2),
     },
     financial: {
-      reserveAndSurplus: screener.reserveSurplus.value * 1000000,
-      bookValue: screener.bookValue.value,
-      totalLiabilities: screener.totalLiabilities.value,
-      netIncome: screener.netIncome.value,
-      totalAsset: screener.totalAsset.value,
-      revenue: screener.revenue.value,
-      earningBeforeInterestAndTaxes: screener.ebit.value,
-      operatingProfit: screener.operatingProfit.value,
+      reserveAndSurplus: screener.reserveSurplus?.value * 1000000,
+      bookValue: screener.bookValue?.value,
+      totalLiabilities: screener.totalLiabilities?.value,
+      netIncome: screener.netIncome?.value,
+      totalAsset: screener.totalAsset?.value,
+      revenue: screener.revenue?.value,
+      earningBeforeInterestAndTaxes: screener.ebit?.value,
+      operatingProfit: screener.operatingProfit?.value,
     },
     fairValue: {
-      priceToCashFlowRatio: pcf.toFixed(2),
-      NetOperatingCashFlowPerShare: screener.nocfpsQuarterly.value.toFixed(2),
+      priceToCashFlowRatio: pcf?.toFixed(2),
+      NetOperatingCashFlowPerShare: screener.nocfpsQuarterly?.value.toFixed(2),
       dividendInPercentage: cashDividend,
       currentPrice: close,
       currency: "BDT",
@@ -147,10 +147,25 @@ const getDataToFeed = async (tradingCode) => {
   @access:    public
 */
 const getInsight = async (req, res, next) => {
-  const { tradingCode, queryType, dataField, language, isDataFeed, data } =
-    req.body;
+  const {
+    tradingCode,
+    queryType,
+    dataTitle,
+    dataField,
+    language,
+    isDataFeed,
+    data,
+  } = req.body;
 
-  console.log(tradingCode, queryType, dataField, language, isDataFeed, data);
+  console.log(
+    tradingCode,
+    queryType,
+    dataTitle,
+    dataField,
+    language,
+    isDataFeed,
+    data
+  );
 
   const contentFromDB = await AiContent.findOne({ tradingCode });
 
@@ -167,12 +182,7 @@ const getInsight = async (req, res, next) => {
 
   switch (queryType) {
     case "fairValue":
-      initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide the fair value of this stock. 
-      1) Use both Dividend Discount Model (DDM) and Discounted Cash Flow (DCF) Analysis. 
-      2) Display the output in below format:
-       1. fair value according to DDM and DCF analysis
-       2. summary explanation.
-      3) There is no need to show calculation.`;
+      initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide the fair value of this stock. Use both Dividend Discount Model (DDM) and Discounted Cash Flow (DCF) Analysis. Display the output in format: 1. Fair value according to DDM and DCF analysis, 2. Summary explanation. No need to show calculation.`;
       break;
     case "strength":
       initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide 3 to 5 strength of this stock. Make it within maximum 1500 characters.`;
@@ -194,12 +204,17 @@ const getInsight = async (req, res, next) => {
     initialText += " Give the insight in bangla language.";
   }
 
-  initialText += " The data is as follows:";
+  initialText += "\n" + `JSON data for stock ${tradingCode}: `;
 
-  const userContent =
-    initialText +
-    "\n\n" +
-    JSON.stringify(isDataFeed ? data : await getDataToFeed(tradingCode));
+  let dataToFeed = {};
+  if (isDataFeed) {
+    dataToFeed = data;
+  } else {
+    const dataFromDbQuery = await getDataToFeed(tradingCode);
+    dataToFeed = dataFromDbQuery[dataTitle];
+  }
+
+  const userContent = initialText + JSON.stringify(dataToFeed);
 
   console.log(userContent);
 
