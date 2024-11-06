@@ -1,10 +1,7 @@
-const createError = require("http-errors");
-
 const OpenAI = require("openai");
 const AiContent = require("../models/aiContentModel");
 const { AI_CONTENT_CUTOFF_HOUR } = require("../data/constants");
 const Fundamental = require("../models/fundamentalModel");
-const { screener } = require("./priceController");
 
 const getDataToFeed = async (tradingCode) => {
   const stock = await Fundamental.aggregate([
@@ -157,15 +154,15 @@ const getInsight = async (req, res, next) => {
     data,
   } = req.body;
 
-  console.log(
-    tradingCode,
-    queryType,
-    dataTitle,
-    dataField,
-    language,
-    isDataFeed,
-    data
-  );
+  // console.log(
+  //   tradingCode,
+  //   queryType,
+  //   dataTitle,
+  //   dataField,
+  //   language,
+  //   isDataFeed,
+  //   data
+  // );
 
   const contentFromDB = await AiContent.findOne({ tradingCode });
 
@@ -216,7 +213,7 @@ const getInsight = async (req, res, next) => {
 
   const userContent = initialText + JSON.stringify(dataToFeed);
 
-  console.log(userContent);
+  // console.log(userContent);
 
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY, // Replace with your OpenAI API key

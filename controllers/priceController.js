@@ -4457,8 +4457,8 @@ const marketDepth = async (req, res) => {
   @access:    public
 */
 const marketDepthAllInst = async (req, res) => {
-  // const allStocks = await LatestPrice.find();
-  const allStocks = [{ tradingCode: "ARAMITCEM" }];
+  const allStocks = await LatestPrice.find();
+  // const allStocks = [{ tradingCode: "ARAMITCEM" }];
 
   const result = [];
 
