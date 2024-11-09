@@ -6,7 +6,7 @@ const formatDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-const marketStatusHelper = async (
+const marketStatusHelper = (
   dataInsertionEnable,
   openHour,
   openMinute,

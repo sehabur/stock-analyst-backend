@@ -430,7 +430,7 @@ const getBarsTvchart = async (req, res) => {
   } else if (resolutionType == "day" && symbolType == "sector") {
     dataTable = "daily_sectors";
 
-    console.log(symbol, new Date(fromTime * 1000), new Date(toTime * 1000));
+    // console.log(symbol, new Date(fromTime * 1000), new Date(toTime * 1000));
 
     const sectorPrices = await DailySector.aggregate([
       {
@@ -613,7 +613,7 @@ const getMarketStatus = async (req, res, next) => {
     iosVersionCode,
   } = await Setting.findOne();
 
-  const { statusText, isOpen } = await marketStatusHelper(
+  const { statusText, isOpen } = marketStatusHelper(
     dataInsertionEnable,
     openHour,
     openMinute,
@@ -698,7 +698,7 @@ const getIndexInfo = async (req, res, next) => {
     preCloseMinute,
   } = await Setting.findOne();
 
-  const marketOpenStatus = await marketStatusHelper(
+  const marketOpenStatus = marketStatusHelper(
     dataInsertionEnable,
     openHour,
     openMinute,
@@ -1434,10 +1434,108 @@ const dailySectorPrice = async (req, res, next) => {
       "dailySectorUpdateDate minuteDataUpdateDate"
     );
 
+  // const minuteSector = await Fundamental.aggregate([
+  //   {
+  //     $match: {
+  //       sector: sector,
+  //     },
+  //   },
+  //   {
+  //     $lookup: {
+  //       from: "day_minute_prices",
+  //       localField: "tradingCode",
+  //       foreignField: "tradingCode",
+  //       as: "minute_prices",
+  //       pipeline: [
+  //         {
+  //           $addFields: {
+  //             ltp_modified: {
+  //               $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"],
+  //             },
+  //             high: {
+  //               $cond: [{ $gt: ["$high", 0] }, "$high", "$ycp"],
+  //             },
+  //             low: {
+  //               $cond: [{ $gt: ["$low", 0] }, "$low", "$ycp"],
+  //             },
+  //           },
+  //         },
+  //       ],
+  //     },
+  //   },
+  //   { $unwind: "$minute_prices" },
+  //   {
+  //     $group: {
+  //       _id: "$minute_prices.time",
+  //       open_temp: { $push: "$minute_prices.ltp" },
+  //       ltp: { $avg: "$minute_prices.ltp_modified" },
+  //       ycp: { $avg: "$minute_prices.ycp" },
+  //       high: { $avg: "$minute_prices.high" },
+  //       low: { $avg: "$minute_prices.low" },
+  //       close: { $avg: "$minute_prices.ltp_modified" },
+  //       trade: { $sum: "$minute_prices.trade" },
+  //       value: { $sum: "$minute_prices.value" },
+  //       volume: { $sum: "$minute_prices.volume" },
+  //     },
+  //   },
+  //   {
+  //     $addFields: {
+  //       open: {
+  //         $arrayElemAt: [
+  //           {
+  //             $filter: {
+  //               input: "$open_temp",
+  //               as: "open_temp",
+  //               cond: { $ne: ["$$open_temp", 0] },
+  //             },
+  //           },
+  //           0,
+  //         ],
+  //       },
+  //       change: { $subtract: ["$close", "$ycp"] },
+  //       percentChange: {
+  //         $multiply: [
+  //           { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
+  //           100,
+  //         ],
+  //       },
+  //     },
+  //   },
+  //   {
+  //     $sort: {
+  //       _id: 1,
+  //     },
+  //   },
+  //   {
+  //     $project: {
+  //       time: "$_id",
+  //       _id: 0,
+  //       open: {
+  //         $round: [{ $cond: [{ $gt: ["$open", 0] }, "$open", "$ycp"] }, 2],
+  //       },
+  //       ltp: { $round: ["$ltp", 2] },
+  //       ycp: { $round: ["$ycp", 2] },
+  //       high: { $round: ["$high", 2] },
+  //       low: { $round: ["$low", 2] },
+  //       close: { $round: ["$close", 2] },
+  //       change: { $round: ["$change", 2] },
+  //       percentChange: { $round: ["$percentChange", 2] },
+  //       trade: 1,
+  //       value: 1,
+  //       volume: 1,
+  //     },
+  //   },
+  // ]);
+
   const minuteSector = await Fundamental.aggregate([
     {
       $match: {
         sector: sector,
+      },
+    },
+    {
+      $project: {
+        tradingCode: 1,
       },
     },
     {
@@ -1446,40 +1544,13 @@ const dailySectorPrice = async (req, res, next) => {
         localField: "tradingCode",
         foreignField: "tradingCode",
         as: "minute_prices",
-        pipeline: [
-          {
-            $addFields: {
-              close: {
-                $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
-              },
-            },
-          },
-        ],
       },
     },
     { $unwind: "$minute_prices" },
     {
       $group: {
         _id: "$minute_prices.time",
-        ltp: { $avg: "$minute_prices.ltp" },
-        ycp: { $avg: "$minute_prices.ycp" },
-        high: { $avg: "$minute_prices.high" },
-        low: { $avg: "$minute_prices.low" },
-        close: { $avg: "$minute_prices.close" },
-        trade: { $sum: "$minute_prices.trade" },
-        value: { $sum: "$minute_prices.value" },
-        volume: { $sum: "$minute_prices.volume" },
-      },
-    },
-    {
-      $addFields: {
-        change: { $subtract: ["$close", "$ycp"] },
-        percentChange: {
-          $multiply: [
-            { $divide: [{ $subtract: ["$close", "$ycp"] }, "$ycp"] },
-            100,
-          ],
-        },
+        prices: { $push: "$minute_prices" },
       },
     },
     {
@@ -1487,23 +1558,60 @@ const dailySectorPrice = async (req, res, next) => {
         _id: 1,
       },
     },
-    {
-      $project: {
-        time: "$_id",
-        _id: 0,
-        ltp: { $round: ["$ltp", 2] },
-        ycp: { $round: ["$ycp", 2] },
-        high: { $round: ["$high", 2] },
-        low: { $round: ["$low", 2] },
-        close: { $round: ["$close", 2] },
-        change: { $round: ["$change", 2] },
-        percentChange: { $round: ["$percentChange", 2] },
-        trade: 1,
-        value: 1,
-        volume: 1,
-      },
-    },
   ]);
+
+  let minuteDataModified = [];
+  let high = 0;
+  let low = Infinity;
+  let ycp = 0;
+
+  for (let j = 0; j < minuteSector.length; j++) {
+    let minuteData = minuteSector[j];
+
+    let closes = [];
+    let volumes = [];
+    let values = [];
+    let trades = [];
+    let ycps = [];
+
+    for (let i = 0; i < minuteData.prices.length; i++) {
+      let stock = minuteData.prices[i];
+
+      if (j == 0) {
+        ycps[i] = stock.ycp;
+      }
+
+      let close = stock.ltp != 0 ? stock.ltp : stock.ycp;
+
+      closes[i] = close;
+
+      volumes[i] = stock.volume;
+      values[i] = stock.value;
+      trades[i] = stock.trade;
+    }
+
+    const avgClose = calcAvg(closes);
+
+    const volumeSum = calcSum(volumes);
+    const valueSum = calcSum(values);
+    const tradeSum = calcSum(trades);
+
+    high = Math.max(high, avgClose);
+    low = Math.min(low, avgClose);
+
+    if (j == 0) {
+      ycp = calcAvg(ycps);
+    }
+
+    minuteDataModified.push({
+      time: minuteData._id,
+      close: avgClose,
+      ltp: avgClose,
+      volume: volumeSum,
+      value: valueSum,
+      trade: tradeSum,
+    });
+  }
 
   const yesterdayPrice = await YesterdayPrice.findOne({
     tradingCode: sector,
@@ -1542,9 +1650,10 @@ const dailySectorPrice = async (req, res, next) => {
           },
           {
             $addFields: {
-              close: {
-                $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
-              },
+              high: { $cond: [{ $gt: ["$high", 0] }, "$high", "$ycp"] },
+              low: { $cond: [{ $gt: ["$low", 0] }, "$low", "$ycp"] },
+              close: { $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"] },
+              ltp: { $cond: [{ $gt: ["$ltp", 0] }, "$ltp", "$ycp"] },
             },
           },
           {
@@ -1677,13 +1786,22 @@ const dailySectorPrice = async (req, res, next) => {
             },
           },
           {
-            $addFields: {
-              date: "$_id",
+            $sort: {
+              _id: 1,
             },
           },
           {
-            $sort: {
-              _id: 1,
+            $project: {
+              date: "$_id",
+              _id: 0,
+              open: 1,
+              high: 1,
+              low: 1,
+              close: 1,
+              ltp: 1,
+              trade: { $round: ["$trade", 2] },
+              volume: { $round: ["$volume", 2] },
+              value: { $round: ["$value", 2] },
             },
           },
         ],
@@ -1717,13 +1835,22 @@ const dailySectorPrice = async (req, res, next) => {
             },
           },
           {
-            $addFields: {
-              date: "$_id",
+            $sort: {
+              _id: 1,
             },
           },
           {
-            $sort: {
-              _id: 1,
+            $project: {
+              date: "$_id",
+              _id: 0,
+              open: 1,
+              high: 1,
+              low: 1,
+              close: 1,
+              ltp: 1,
+              trade: { $round: ["$trade", 2] },
+              volume: { $round: ["$volume", 2] },
+              value: { $round: ["$value", 2] },
             },
           },
         ],
@@ -1731,12 +1858,44 @@ const dailySectorPrice = async (req, res, next) => {
     },
   ]);
 
-  const latestSector = minuteSector[minuteSector.length - 1];
+  let latestData = {};
+
+  const lastMinuteData = minuteDataModified[minuteDataModified.length - 1];
+
+  if (
+    new Date(dailySectorUpdateDate).getTime() ==
+    new Date(minuteDataUpdateDate).getTime()
+  ) {
+    latestData = {
+      ...dailySector[0].daily[dailySector[0].daily.length - 1],
+      time: lastMinuteData.time,
+    };
+  } else {
+    const lastClose = lastMinuteData.close;
+    latestData = {
+      ...lastMinuteData,
+      open: minuteDataModified[0].close,
+      high,
+      low,
+      ycp,
+      change: Number((lastClose - ycp).toFixed(2)),
+      percentChange: Number((((lastClose - ycp) / ycp) * 100).toFixed(2)),
+    };
+  }
+
+  // const latestSector = minuteSector[minuteSector.length - 1];
+
+  // res.status(200).json({
+  //   latest: latestSector,
+  //   lastDay: yesterdayPrice,
+  //   minute: minuteSector,
+  //   ...dailySector[0],
+  // });
 
   res.status(200).json({
-    latest: latestSector,
+    latest: latestData,
     lastDay: yesterdayPrice,
-    minute: minuteSector,
+    minute: minuteDataModified,
     ...dailySector[0],
   });
 };
@@ -2055,24 +2214,33 @@ const stockDetails = async (req, res, next) => {
 
   const lastDailyValueUpdateTime = minutePrice[minutePrice.length - 1]["time"];
 
-  if (lastDailyValue.ltp == 0) {
-    const ycp = lastDailyValue.ycp;
-
+  if (
+    new Date(lastDailyValue.date).getTime() ==
+    new Date(minuteDataUpdateDate).getTime()
+  ) {
     latestPrice = {
       ...lastDailyValue,
       time: lastDailyValueUpdateTime,
+      isNullDataAtDse: "NO",
+    };
+  } else {
+    const ycp = lastDailyValue.ycp;
+
+    latestPrice = {
+      date: minuteDataUpdateDate,
       open: ycp,
       ltp: ycp,
       high: ycp,
       low: ycp,
       close: ycp,
-      isNullDataAtDse: "YES",
-    };
-  } else {
-    latestPrice = {
-      ...lastDailyValue,
+      ycp: ycp,
+      change: 0,
+      percentChange: 0,
+      trade: 0,
+      value: 0,
+      volume: 0,
       time: lastDailyValueUpdateTime,
-      isNullDataAtDse: "NO",
+      isNullDataAtDse: "YES",
     };
   }
 
@@ -2313,7 +2481,7 @@ const stockDetails = async (req, res, next) => {
       : null,
   };
 
-  const marketOpenStatus = await marketStatusHelper(
+  const marketOpenStatus = marketStatusHelper(
     dataInsertionEnable,
     openHour,
     openMinute,
@@ -2640,7 +2808,7 @@ const indexDetails = async (req, res, next) => {
     companyName: 1,
   });
 
-  const marketOpenStatus = await marketStatusHelper(
+  const marketOpenStatus = marketStatusHelper(
     dataInsertionEnable,
     openHour,
     openMinute,
@@ -2772,7 +2940,7 @@ const indexMinuteData = async (req, res, next) => {
 
   const rsi = calculateRsiLastValue(prices);
 
-  const marketOpenStatus = await marketStatusHelper(
+  const marketOpenStatus = marketStatusHelper(
     dataInsertionEnable,
     openHour,
     openMinute,
@@ -4516,8 +4684,6 @@ const marketDepthAllInst = async (req, res) => {
 
     const { circuitUp, circuitLow } = circuitUpDownLimits(ycp);
 
-    console.log(circuitUp, circuitLow, ycp);
-
     const upperCircuitLimitReached =
       change > 0 && circuitUp == price ? true : false;
 
@@ -4820,6 +4986,16 @@ const formatCandleChartData = (data) => {
     }
   }
   return candle;
+};
+
+const calcAvg = (numArray) => {
+  const sum = numArray.reduce((acc, curr) => acc + curr, 0);
+  return Number((sum / numArray.length).toFixed(2));
+};
+
+const calcSum = (numArray) => {
+  const sum = numArray.reduce((acc, curr) => acc + curr, 0);
+  return Number(sum.toFixed(2));
 };
 
 module.exports = {
