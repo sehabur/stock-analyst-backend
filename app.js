@@ -42,16 +42,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// morgan.token('ip', (req) => req.ip);
-
 app.set("trust proxy", true);
 
 app.use(
   morgan("combined", {
-    stream: fs.createWriteStream(
-      path.join(__dirname, "logs", formatDate() + "_access.log"),
-      { flags: "a" }
-    ),
+    stream: {
+      write: (message) => {
+        fs.appendFileSync(
+          path.join(__dirname, "logs", formatDate() + "_access.log"),
+          message
+        );
+      },
+    },
   })
 );
 

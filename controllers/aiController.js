@@ -183,17 +183,18 @@ const getDataToFeed = async (tradingCode) => {
 
   const data = {
     technical: {
-      betaOneYear: technicals?.beta,
-      movingAverages: technicals?.movingAverages,
-      oscillators: technicals?.oscillators,
       supportAndResistance: technicals?.pivots,
+      oscillators: technicals?.oscillators,
+      movingAverages: technicals?.movingAverages,
       candlestick: technicals?.candlestick?.value,
+      betaOneYear: technicals?.beta,
       currency: "BDT",
     },
     fundamentalRatio: {
       priceToEarningRatio: pe?.toFixed(2),
-      priceToBookValueRatio: pbv?.toFixed(2),
       earningsPerShare: epsCurrent?.toFixed(2),
+      NetAssetValue: screener?.navQuarterly?.value?.toFixed(2),
+      priceToBookValueRatio: pbv?.toFixed(2),
       priceToSalesRatio: screener?.ps?.value?.toFixed(2),
       debtToEquityRatio: screener?.de?.value?.toFixed(2),
       returnOfEquity: screener?.roe?.value?.toFixed(2),
@@ -203,25 +204,24 @@ const getDataToFeed = async (tradingCode) => {
       netIncomeRatio: screener?.netIncomeRatio?.value?.toFixed(2),
       NetOperatingCashFlowPerShare:
         screener?.nocfpsQuarterly?.value?.toFixed(2),
-      NetAssetValue: screener?.navQuarterly?.value?.toFixed(2),
       currency: "BDT",
     },
     financial: {
+      totalAsset: screener?.totalAsset?.value,
+      revenue: screener?.revenue?.value,
+      netIncome: screener?.netIncome?.value,
       reserveAndSurplus: screener?.reserveSurplus?.value * 1000000,
       bookValue: screener?.bookValue?.value,
       totalLiabilities: screener?.totalLiabilities?.value,
-      netIncome: screener?.netIncome?.value,
-      totalAsset: screener?.totalAsset?.value,
-      revenue: screener?.revenue?.value,
       earningBeforeInterestAndTaxes: screener?.ebit?.value,
       operatingProfit: screener?.operatingProfit?.value,
       currency: "BDT",
     },
     fairValue: {
+      dividendInPercentage: cashDividend,
       priceToCashFlowRatio: pcf?.toFixed(2),
       NetOperatingCashFlowPerShare:
         screener?.nocfpsQuarterly?.value?.toFixed(2),
-      dividendInPercentage: cashDividend,
       currentPrice: close,
       currency: "BDT",
     },
