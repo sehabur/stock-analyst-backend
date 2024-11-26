@@ -282,7 +282,9 @@ const getPromptInitText = (queryType, language, tradingCode) => {
 
   switch (queryType) {
     case "fairValue":
-      initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide the fair value of this stock. Use both Dividend Discount Model (DDM) and Discounted Cash Flow (DCF) Analysis. Display the output in format: 1. Fair value according to DDM and DCF analysis and current price, 2. Summary explanation. No need to show calculation.`;
+      initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide the fair value of this stock. Use both Dividend Discount Model (DDM) and Discounted Cash Flow (DCF) Analysis. Display the output in format: 
+      1. Fair value according to DDM and DCF analysis and current price. Show currency in BDT.
+      2. Summary explanation. No need to show calculation.`;
       break;
     case "strength":
       initialText = `Here is some fundamental data of a stock in JSON format. Please analyze it and provide 3 to 5 strength of this stock. Make it within maximum 1500 characters.`;

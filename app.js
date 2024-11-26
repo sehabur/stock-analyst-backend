@@ -57,6 +57,7 @@ app.use(
   })
 );
 
+// Routes //
 app.use("/api/prices", priceRoute);
 app.use("/api/users", userRoute);
 app.use("/api/tvcharts", tvchartRoute);

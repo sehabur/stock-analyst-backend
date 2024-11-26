@@ -28,7 +28,7 @@ const {
   dsexShares,
 } = require("../data/dse");
 
-const { marketStatusHelper } = require("../helper/price");
+const { marketStatusHelper, isBetweenSpotRange } = require("../helper/price");
 
 const {
   calculateSmaLastValue,
@@ -743,7 +743,191 @@ const latestPrice = async (req, res, next) => {
     await Setting.findOne().select(
       "dailyPriceUpdateDate dailySectorUpdateDate minuteDataUpdateDate"
     );
-  DayMinutePrice;
+
+  // const latestPrice2 = await Fundamental.aggregate([
+  //   {
+  //     $match: {
+  //       type: "stock",
+  //       isActive: true,
+  //     },
+  //   },
+  //   {
+  //     $project: {
+  //       tradingCode: 1,
+  //       sector: 1,
+  //       category: 1,
+  //       companyName: 1,
+  //       type: 1,
+  //       recordDate: 1,
+  //       spotRange: 1,
+  //     },
+  //   },
+  //   {
+  //     $lookup: {
+  //       from: "daily_prices",
+  //       localField: "tradingCode",
+  //       foreignField: "tradingCode",
+  //       as: "daily_prices",
+  //       pipeline: [
+  //         {
+  //           $match: {
+  //             date: minuteDataUpdateDate,
+  //           },
+  //         },
+  //         {
+  //           $unionWith: {
+  //             coll: "day_minute_prices",
+  //             pipeline: [
+  //               {
+  //                 $match: {
+  //                   date: {
+  //                     $gt: dailyPriceUpdateDate,
+  //                   },
+  //                 },
+  //               },
+  //               {
+  //                 $sort: {
+  //                   time: 1,
+  //                 },
+  //               },
+  //               {
+  //                 $group: {
+  //                   _id: "$tradingCode",
+  //                   open: { $first: "$ltp" },
+  //                   high: { $last: "$high" },
+  //                   low: { $last: "$low" },
+  //                   close: { $last: "$close" },
+  //                   ltp: { $last: "$ltp" },
+  //                   ycp: { $first: "$ycp" },
+  //                   change: { $last: "$change" },
+  //                   percentChange: { $last: "$percentChange" },
+  //                   trade: { $last: "$trade" },
+  //                   volume: { $last: "$volume" },
+  //                   value: { $last: "$value" },
+  //                 },
+  //               },
+  //               {
+  //                 $project: {
+  //                   tradingCode: "$_id",
+  //                   _id: 0,
+  //                   open: 1,
+  //                   high: 1,
+  //                   low: 1,
+  //                   close: 1,
+  //                   ltp: 1,
+  //                   ycp: 1,
+  //                   change: 1,
+  //                   percentChange: 1,
+  //                   volume: 1,
+  //                   trade: 1,
+  //                   value: 1,
+  //                 },
+  //               },
+  //             ],
+  //           },
+  //         },
+  //         {
+  //           $addFields: {
+  //             close: {
+  //               $cond: [{ $gt: ["$close", 0] }, "$close", "$ycp"],
+  //             },
+  //           },
+  //         },
+  //         // {
+  //         //   $unionWith: {
+  //         //     coll: "index_day_minute_values",
+  //         //     pipeline: [
+  //         //       {
+  //         //         $match: {
+  //         //           index: { $ne: 0 },
+  //         //           date: {
+  //         //             $gt: dailyPriceUpdateDate,
+  //         //           },
+  //         //         },
+  //         //       },
+  //         //       {
+  //         //         $group: {
+  //         //           _id: "$tradingCode",
+  //         //           open: { $first: "$index" },
+  //         //           high: { $max: "$index" },
+  //         //           low: { $min: "$index" },
+  //         //           close: { $last: "$index" },
+  //         //           ltp: { $last: "$index" },
+  //         //           ycp: { $first: "$index" },
+  //         //           change: { $last: "$change" },
+  //         //           percentChange: { $last: "$percentChange" },
+  //         //           volume: { $last: "$volume" },
+  //         //           trade: { $last: "$trade" },
+  //         //           value: { $last: "$value" },
+  //         //         },
+  //         //       },
+  //         //       {
+  //         //         $project: {
+  //         //           tradingCode: "$_id",
+  //         //           _id: 0,
+  //         //           open: { $round: ["$open", 2] },
+  //         //           high: { $round: ["$high", 2] },
+  //         //           low: { $round: ["$low", 2] },
+  //         //           close: { $round: ["$close", 2] },
+  //         //           ltp: { $round: ["$ltp", 2] },
+  //         //           ycp: { $round: ["$ycp", 2] },
+  //         //           change: { $round: ["$change", 2] },
+  //         //           percentChange: { $round: ["$percentChange", 2] },
+  //         //           value: 1,
+  //         //           volume: 1,
+  //         //           trade: 1,
+  //         //         },
+  //         //       },
+  //         //     ],
+  //         //   },
+  //         // },
+  //       ],
+  //     },
+  //   },
+  //   { $unwind: { path: "$daily_prices", preserveNullAndEmptyArrays: true } },
+  //   {
+  //     $lookup: {
+  //       from: "halt_shares",
+  //       localField: "tradingCode",
+  //       foreignField: "tradingCode",
+  //       as: "halt_shares",
+  //       pipeline: [
+  //         {
+  //           $match: {
+  //             date: minuteDataUpdateDate,
+  //           },
+  //         },
+  //       ],
+  //     },
+  //   },
+  //   { $unwind: { path: "$halt_shares", preserveNullAndEmptyArrays: true } },
+  //   {
+  //     $sort: { tradingCode: 1 },
+  //   },
+  //   {
+  //     $project: {
+  //       tradingCode: 1,
+  //       sector: 1,
+  //       category: 1,
+  //       companyName: 1,
+  //       type: 1,
+  //       recordDate: 1,
+  //       spotRange: 1,
+  //       haltStatus: "$halt_shares.status",
+  //       ltp: "$daily_prices.ltp",
+  //       ycp: "$daily_prices.ycp",
+  //       close: "$daily_prices.close",
+  //       open: "$daily_prices.open",
+  //       high: "$daily_prices.high",
+  //       low: "$daily_prices.low",
+  //       change: "$daily_prices.change",
+  //       percentChange: "$daily_prices.percentChange",
+  //       trade: "$daily_prices.trade",
+  //       value: "$daily_prices.value",
+  //       volume: "$daily_prices.volume",
+  //     },
+  //   },
+  // ]);
 
   const latestPrice = await DailyPrice.aggregate([
     {
@@ -891,6 +1075,7 @@ const latestPrice = async (req, res, next) => {
         type: "$fundamentals.type",
         recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
+        spotRange: "$fundamentals.spotRange",
       },
     },
     {
@@ -900,6 +1085,43 @@ const latestPrice = async (req, res, next) => {
       $project: { fundamentals: 0, halt_shares: 0, _id: 0 },
     },
   ]);
+
+  // const allStock = await Fundamental.find({
+  //   type: "stock",
+  //   isActive: true,
+  // }).select("tradingCode sector");
+
+  // const nonTradingStocks = [];
+  // for (let stock of allStock) {
+  //   let tradeStatus = false;
+  //   for (let latestStock of latestPrice) {
+  //     if (stock.tradingCode === latestStock.tradingCode) {
+  //       tradeStatus = true;
+  //       break;
+  //     }
+  //   }
+  //   if (!tradeStatus) {
+  //     nonTradingStocks.push({
+  //       tradingCode: stock.tradingCode,
+  //       category: stock.category,
+  //       companyName: stock.companyName,
+  //       sector: stock.sector,
+  //       type: stock.type,
+  //       recordDate: stock.recordDate,
+  //       spotRange: stock.spotRange,
+  //       haltStatus: "none",
+  //     });
+  //   }
+  // }
+
+  // console.log(nonTradingStocks);
+
+  // const latestPrice = latestPriceData.map((item) => {
+  //   return {
+  //     ...item,
+  //     isSpotEnabled: isBetweenSpotRange(item.spotRange),
+  //   };
+  // });
 
   const sectorPrice = await DailySector.aggregate([
     {
@@ -2011,6 +2233,7 @@ const stockDetails = async (req, res, next) => {
     {
       $match: {
         tradingCode,
+        isRecordDate: { $ne: true },
       },
     },
     {
@@ -3093,6 +3316,7 @@ const topGainerLoser = async (req, res, next) => {
         companyName: "$fundamentals.companyName",
         recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
+        spotRange: "$fundamentals.spotRange",
       },
     },
     {
@@ -3124,6 +3348,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3154,6 +3379,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3184,6 +3410,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3214,6 +3441,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3244,6 +3472,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3274,6 +3503,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3304,6 +3534,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3334,6 +3565,7 @@ const topGainerLoser = async (req, res, next) => {
               companyName: 1,
               haltStatus: 1,
               recordDate: 1,
+              spotRange: 1,
             },
           },
         ],
@@ -3730,6 +3962,7 @@ const allGainerLoser = async (req, res, next) => {
         sector: "$fundamentals.sector",
         recordDate: "$fundamentals.recordDate",
         haltStatus: "$halt_shares.status",
+        spotRange: "$fundamentals.spotRange",
         id: "$_id",
       },
     },
@@ -3745,6 +3978,7 @@ const allGainerLoser = async (req, res, next) => {
         type: 1,
         sector: 1,
         recordDate: 1,
+        spotRange: 1,
         haltStatus: 1,
         day: {
           change: "$change",

@@ -57,6 +57,8 @@ const fundamentalSchema = mongoose.Schema(
     netIncomeRatio: [{ type: Object, required: true }],
     profitMargin: [{ type: Object, required: true }],
 
+    spotRange: [{ type: Date }],
+
     screener: { type: Object },
 
     technicals: { type: Object },

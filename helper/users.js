@@ -27,7 +27,6 @@ function addDaysToToday(days) {
 }
 
 function generateSixDigitRandomNumber() {
-  // return 123456;
   return Math.floor(100000 + Math.random() * 900000);
 }
 
@@ -35,8 +34,7 @@ function generateSixDigitRandomNumber() {
   Function for bulksmsbd
 */
 const sendOtpToUser = async (phone, message) => {
-  return { status: "success" };
-
+  // return { status: "success" };
   try {
     const url = process.env.SMS_GW_URL;
     const apiKey = process.env.SMS_GW_API_KEY;

@@ -6,6 +6,14 @@ const formatDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+const isBetweenSpotRange = (spotRangeArr) => {
+  if (!spotRangeArr || spotRangeArr.length < 2) return false;
+  const start = new Date(spotRangeArr[0]).getTime();
+  const end = new Date(spotRangeArr[1]).getTime();
+  const now = new Date().getTime();
+  return now > start && now < end;
+};
+
 const marketStatusHelper = (
   dataInsertionEnable,
   openHour,
@@ -163,6 +171,7 @@ function calculateBeta(stockData, marketData) {
 
 module.exports = {
   formatDate,
+  isBetweenSpotRange,
   marketStatusHelper,
   // getMarketOpenStatus,
   calculateBeta,
