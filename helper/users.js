@@ -56,6 +56,7 @@ const sendOtpToUser = async (phone, message) => {
     return { status: "fail" };
   }
 };
+
 /*
   Function for sms.net.bd
 */

@@ -137,6 +137,7 @@ const signup = async (req, res, next) => {
 
 const generateOtp = async (req, res, next) => {
   try {
+    console.log("first");
     const { _id, phone } = req.user;
     const otp = generateSixDigitRandomNumber();
 
@@ -173,7 +174,7 @@ const verifyPhone = async (req, res, next) => {
         await User.findByIdAndUpdate(req.user._id, {
           $set: {
             isPremium: true,
-            premiumExpireDate: addDaysToToday(1),
+            premiumExpireDate: addDaysToToday(14),
             isFreeTrialUsed: true,
             isVerified: true,
           },
