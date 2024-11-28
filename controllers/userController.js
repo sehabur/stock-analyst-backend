@@ -137,8 +137,8 @@ const signup = async (req, res, next) => {
 
 const generateOtp = async (req, res, next) => {
   try {
-    console.log("first");
     const { _id, phone } = req.user;
+
     const otp = generateSixDigitRandomNumber();
 
     const message =

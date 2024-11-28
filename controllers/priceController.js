@@ -109,6 +109,7 @@ const getBarsTvchart = async (req, res) => {
             $gte: new Date((fromTime - 86400 * priorDayCount) * 1000),
             $lte: new Date(toTime * 1000),
           },
+          isRecordDate: { $ne: true },
         },
       },
       {
@@ -2420,6 +2421,8 @@ const stockDetails = async (req, res, next) => {
     },
   ]);
 
+  // res.json(dailyPrice);
+
   const halt = await HaltStatus.findOne({
     tradingCode: tradingCode,
     date: minuteDataUpdateDate,
@@ -2433,7 +2436,7 @@ const stockDetails = async (req, res, next) => {
 
   let latestPrice = {};
 
-  const lastDailyValue = dailyPrice[0].daily.pop();
+  const lastDailyValue = dailyPrice[0].daily[dailyPrice[0].daily.length - 1];
 
   const lastDailyValueUpdateTime = minutePrice[minutePrice.length - 1]["time"];
 
@@ -2448,6 +2451,10 @@ const stockDetails = async (req, res, next) => {
     };
   } else {
     const ycp = lastDailyValue.ycp;
+
+    // const customDatetime = new Date(lastDailyValue.date);
+    // customDatetime.setUTCHours(8, 30, 0, 0);
+    // customDatetime.toISOString();
 
     latestPrice = {
       date: minuteDataUpdateDate,
@@ -2467,7 +2474,7 @@ const stockDetails = async (req, res, next) => {
     };
   }
 
-  dailyPrice[0].daily.push(latestPrice);
+  // dailyPrice[0].daily.push(latestPrice);
 
   // if (minutePrice.length > 0) {
   //   latestPrice = minutePrice[0].latest;

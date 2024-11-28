@@ -34,7 +34,6 @@ function generateSixDigitRandomNumber() {
   Function for bulksmsbd
 */
 const sendOtpToUser = async (phone, message) => {
-  // return { status: "success" };
   try {
     const url = process.env.SMS_GW_URL;
     const apiKey = process.env.SMS_GW_API_KEY;
